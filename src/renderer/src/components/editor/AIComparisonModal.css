@@ -1,0 +1,237 @@
+.ai-comparison-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(15px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100000;
+    animation: fadeIn 0.3s ease;
+}
+
+.ai-comparison-modal {
+    width: 900px;
+    max-width: 95vw;
+    background: #0f172a;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 24px;
+    box-shadow: 0 50px 100px -20px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.comparison-header {
+    padding: 20px 30px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.header-icon {
+    color: #a78bfa;
+}
+
+.header-info h3 {
+    margin: 0;
+    color: white;
+    font-size: 1.25rem;
+}
+
+.header-info p {
+    margin: 4px 0 0 0;
+    color: #94a3b8;
+    font-size: 0.85rem;
+}
+
+.comparison-body {
+    flex: 1;
+    padding: 30px;
+    background: #020617;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    max-height: 70vh;
+}
+
+.comparison-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    max-height: 500px;
+    aspect-ratio: 16/9;
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: col-resize;
+    user-select: none;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+.comparison-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.image-after,
+.image-before {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.badge {
+    position: absolute;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    z-index: 10;
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.badge.before {
+    top: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+}
+
+.badge.after {
+    top: 20px;
+    right: 20px;
+    background: rgba(139, 92, 246, 0.4);
+    color: #ddd6fe;
+    border-color: rgba(139, 92, 246, 0.3);
+}
+
+/* Slider Handle */
+.slider-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #8b5cf6;
+    z-index: 20;
+    cursor: col-resize;
+}
+
+.handle-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    background: rgba(139, 92, 246, 0.5);
+}
+
+.handle-button {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 44px;
+    height: 44px;
+    background: #8b5cf6;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.6);
+    border: 3px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Footer */
+.comparison-footer {
+    padding: 25px 30px;
+    background: #0f172a;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tips {
+    color: #64748b;
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
+.footer-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.footer-actions button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.btn-accept {
+    background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+    color: white;
+    box-shadow: 0 10px 20px rgba(139, 92, 246, 0.3);
+}
+
+.btn-accept:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 25px rgba(139, 92, 246, 0.5);
+}
+
+.btn-retry {
+    background: rgba(255, 255, 255, 0.05);
+    color: #e2e8f0;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.btn-retry:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-cancel {
+    background: transparent;
+    color: #ef4444;
+}
+
+.btn-cancel:hover {
+    background: rgba(239, 68, 68, 0.1);
+}

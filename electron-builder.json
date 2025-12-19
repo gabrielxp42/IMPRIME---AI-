@@ -1,0 +1,56 @@
+{
+  "appId": "com.spotwhite.automation",
+  "productName": "Spot White Automation",
+  "directories": {
+    "output": "release",
+    "buildResources": "build"
+  },
+  "buildVersion": "1.0.0",
+  "files": [
+    "dist/**/*",
+    "package.json"
+  ],
+  "extraFiles": [
+    {
+      "from": "dist/photoshop_automation.py",
+      "to": "photoshop_automation.py"
+    }
+  ],
+  "extraResources": [
+    {
+      "from": "upscayl-bin",
+      "to": "upscayl-bin",
+      "filter": [
+        "**/*"
+      ]
+    },
+    {
+      "from": "dist/background_remover.exe",
+      "to": "background_remover.exe"
+    },
+    {
+      "from": "dist/background_remover_highprecision.exe",
+      "to": "background_remover_highprecision.exe"
+    }
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      },
+      {
+        "target": "portable",
+        "arch": [
+          "x64"
+        ]
+      }
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true
+  }
+}

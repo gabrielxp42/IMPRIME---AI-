@@ -1,0 +1,338 @@
+.settings-view {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+  background: linear-gradient(180deg, #0f0f1e 0%, #1a1a2e 100%);
+}
+
+.settings-header {
+  margin-bottom: 32px;
+}
+
+.settings-header h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 8px 0;
+}
+
+.settings-description {
+  font-size: 14px;
+  color: #a0a0a0;
+  margin: 0;
+}
+
+.settings-content {
+  max-width: 800px;
+}
+
+.settings-section {
+  margin-bottom: 32px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.settings-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0 0 20px 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.setting-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.setting-item-full {
+  grid-column: 1 / -1;
+}
+
+.setting-item label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.setting-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.setting-description {
+  font-size: 12px;
+  color: #888;
+}
+
+.setting-input {
+  width: 100%;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 14px;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.setting-input:focus {
+  outline: none;
+  border-color: #667eea;
+  background: rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+.settings-info {
+  color: #e0e0e0;
+}
+
+.settings-info p {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+}
+
+.format-example {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 16px;
+  border-radius: 8px;
+  margin: 16px 0;
+  border-left: 3px solid #667eea;
+}
+
+.format-example code {
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  color: #4ade80;
+  display: block;
+}
+
+.format-note {
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+  margin-top: 8px;
+}
+
+.info-box {
+  background: rgba(102, 126, 234, 0.1);
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.info-box p {
+  margin: 8px 0;
+  font-size: 14px;
+  color: #e0e0e0;
+}
+
+.info-box strong {
+  color: #ffffff;
+  margin-right: 8px;
+}
+
+.api-key-status-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.api-key-status {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 12px;
+}
+
+.api-key-status.configured {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.1);
+}
+
+.api-key-status.not-configured {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.api-key-link {
+  color: #667eea;
+  font-size: 12px;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.api-key-link:hover {
+  color: #764ba2;
+  text-decoration: underline;
+}
+
+/* Slider de Tolerância (estilo discreto como barra de volume) */
+.tolerance-slider-container {
+  margin-top: 12px;
+}
+
+.tolerance-slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.tolerance-slider:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Track do slider (Webkit) */
+.tolerance-slider::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Thumb do slider (Webkit) */
+.tolerance-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: 2px solid #ffffff;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+  transition: all 0.2s;
+  margin-top: -6px;
+}
+
+.tolerance-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 12px rgba(102, 126, 234, 0.6);
+}
+
+.tolerance-slider::-webkit-slider-thumb:active {
+  transform: scale(1.1);
+}
+
+/* Track do slider (Firefox) */
+.tolerance-slider::-moz-range-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+}
+
+/* Thumb do slider (Firefox) */
+.tolerance-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: 2px solid #ffffff;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+  transition: all 0.2s;
+}
+
+.tolerance-slider::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 12px rgba(102, 126, 234, 0.6);
+}
+
+.tolerance-slider::-moz-range-thumb:active {
+  transform: scale(1.1);
+}
+
+/* Remover outline no Firefox */
+.tolerance-slider::-moz-focus-outer {
+  border: 0;
+}
+
+.slider-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #888;
+}
+
+.slider-value-display {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.slider-value {
+  display: inline-block;
+  padding: 6px 16px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+  border: 1px solid rgba(102, 126, 234, 0.4);
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #667eea;
+  min-width: 60px;
+}
+
+
+/* Logs e Suporte */
+.logs-actions {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0;
+  flex-wrap: wrap;
+}
+
+.btn-logs {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.btn-logs:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+}
+
+.btn-logs:active {
+  transform: translateY(0);
+}
+
+.btn-logs-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: none;
+}
+
+.btn-logs-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
+}
+

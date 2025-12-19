@@ -1,0 +1,236 @@
+/* ConfirmDialog.css - Premium Confirmation Modal */
+
+.confirm-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: overlayFadeIn 0.2s ease-out;
+}
+
+@keyframes overlayFadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.confirm-dialog {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    background: linear-gradient(180deg, rgba(30, 27, 75, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 32px;
+    text-align: center;
+    box-shadow:
+        0 25px 80px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    animation: dialogSlideIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes dialogSlideIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Close Button */
+.dialog-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    border-radius: 50%;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.dialog-close:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    transform: rotate(90deg);
+}
+
+.dialog-close:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.3);
+    outline-offset: 2px;
+}
+
+/* Icon */
+.dialog-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    animation: iconPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.1s both;
+}
+
+@keyframes iconPop {
+    from {
+        transform: scale(0);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.dialog-icon.danger {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border: 2px solid rgba(239, 68, 68, 0.3);
+}
+
+.dialog-icon.warning {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border: 2px solid rgba(245, 158, 11, 0.3);
+}
+
+.dialog-icon.info {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+    border: 2px solid rgba(59, 130, 246, 0.3);
+}
+
+/* Title */
+.dialog-title {
+    margin: 0 0 12px;
+    font-size: 20px;
+    font-weight: 700;
+    color: #f1f5f9;
+}
+
+/* Message */
+.dialog-message {
+    margin: 0 0 28px;
+    font-size: 14px;
+    color: #94a3b8;
+    line-height: 1.6;
+}
+
+/* Actions */
+.dialog-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.dialog-btn {
+    flex: 1;
+    max-width: 150px;
+    padding: 12px 24px;
+    border-radius: 10px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.dialog-btn.secondary {
+    background: rgba(255, 255, 255, 0.08);
+    color: #94a3b8;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dialog-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #f1f5f9;
+}
+
+.dialog-btn.primary {
+    color: white;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.dialog-btn.primary.danger {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+.dialog-btn.primary.danger:hover {
+    box-shadow: 0 8px 25px rgba(239, 68, 68, 0.4);
+    transform: translateY(-2px);
+}
+
+.dialog-btn.primary.warning {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.dialog-btn.primary.warning:hover {
+    box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
+    transform: translateY(-2px);
+}
+
+.dialog-btn.primary.info {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
+.dialog-btn.primary.info:hover {
+    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+    transform: translateY(-2px);
+}
+
+.dialog-btn:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.5);
+    outline-offset: 2px;
+}
+
+.dialog-btn:active {
+    transform: translateY(0) !important;
+}
+
+/* Hint */
+.dialog-hint {
+    margin: 20px 0 0;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.3);
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .confirm-dialog {
+        padding: 24px;
+    }
+
+    .dialog-actions {
+        flex-direction: column;
+    }
+
+    .dialog-btn {
+        max-width: none;
+    }
+}

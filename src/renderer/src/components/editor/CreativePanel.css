@@ -1,0 +1,351 @@
+/* CreativePanel.css - Sidebar Lateral Minimalista */
+
+.creative-panel {
+    position: relative;
+    display: flex;
+    z-index: 50;
+}
+
+/* ========== BOTÕES LATERAIS (sempre visível) ========== */
+.panel-buttons {
+    width: 64px;
+    background: linear-gradient(180deg,
+            rgba(30, 27, 75, 0.95) 0%,
+            rgba(17, 24, 39, 0.95) 100%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-right: 1px solid rgba(139, 92, 246, 0.2);
+    display: flex;
+    flex-direction: column;
+    padding: 12px 8px;
+    gap: 12px;
+    box-shadow:
+        2px 0 8px rgba(0, 0, 0, 0.15),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.panel-btn {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 10px;
+    border: 1.5px solid transparent;
+    background: rgba(55, 65, 81, 0.4);
+    color: rgba(203, 213, 225, 0.8);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.panel-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center,
+            rgba(139, 92, 246, 0.15) 0%,
+            transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.panel-btn:hover {
+    background: rgba(139, 92, 246, 0.12);
+    border-color: rgba(139, 92, 246, 0.4);
+    color: #c4b5fd;
+    transform: translateX(2px);
+}
+
+.panel-btn:hover::before {
+    opacity: 1;
+}
+
+.panel-btn.active {
+    background: linear-gradient(135deg,
+            rgba(139, 92, 246, 0.2) 0%,
+            rgba(124, 58, 237, 0.15) 100%);
+    border-color: rgba(139, 92, 246, 0.5);
+    color: #a78bfa;
+    box-shadow: 0 0 16px rgba(139, 92, 246, 0.3);
+}
+
+.btn-label {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+/* ========== DRAWER EXPANSÍVEL ========== */
+.panel-drawer {
+    width: 260px;
+    background: linear-gradient(135deg,
+            rgba(17, 24, 39, 0.96) 0%,
+            rgba(30, 27, 75, 0.96) 100%);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+    border-right: 1px solid rgba(139, 92, 246, 0.2);
+    box-shadow:
+        4px 0 16px rgba(0, 0, 0, 0.2),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+        0 0 30px rgba(139, 92, 246, 0.1);
+    animation: slideInLeft 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideInLeft {
+    from {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Drawer Content */
+.drawer-content {
+    padding: 20px 16px;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.drawer-content::-webkit-scrollbar {
+    width: 5px;
+}
+
+.drawer-content::-webkit-scrollbar-track {
+    background: rgba(139, 92, 246, 0.05);
+}
+
+.drawer-content::-webkit-scrollbar-thumb {
+    background: rgba(139, 92, 246, 0.3);
+    border-radius: 3px;
+}
+
+.drawer-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(139, 92, 246, 0.15);
+}
+
+.drawer-header h4 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #e2e8f0;
+}
+
+/* ========== SHAPES GRID ========== */
+.shapes-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.shape-card {
+    aspect-ratio: 1;
+    border-radius: 10px;
+    border: 1.5px solid rgba(139, 92, 246, 0.25);
+    background: rgba(55, 65, 81, 0.3);
+    color: rgba(226, 232, 240, 0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.shape-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 50%,
+            rgba(139, 92, 246, 0.2) 0%,
+            transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.shape-card:hover {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: rgba(139, 92, 246, 0.5);
+    transform: translateY(-3px) scale(1.03);
+    box-shadow: 0 8px 20px rgba(139, 92, 246, 0.25);
+}
+
+.shape-card:hover::before {
+    opacity: 1;
+}
+
+.shape-card span {
+    font-size: 11px;
+    font-weight: 600;
+    position: relative;
+    z-index: 1;
+}
+
+/* ========== TEXT BUTTON ========== */
+.text-add-btn {
+    width: 100%;
+    padding: 16px;
+    border-radius: 10px;
+    border: 1.5px solid rgba(139, 92, 246, 0.25);
+    background: rgba(55, 65, 81, 0.3);
+    color: #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-bottom: 12px;
+}
+
+.text-add-btn:hover {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: rgba(139, 92, 246, 0.5);
+    transform: translateX(3px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+}
+
+.btn-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    text-align: left;
+}
+
+.btn-title {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.btn-desc {
+    font-size: 11px;
+    color: rgba(148, 163, 184, 0.8);
+}
+
+.text-tip {
+    padding: 12px;
+    border-radius: 8px;
+    background: rgba(139, 92, 246, 0.08);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    font-size: 12px;
+    color: rgba(196, 181, 253, 0.9);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ========== TEXT PRESETS ========== */
+.text-presets-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.text-preset-card {
+    width: 100%;
+    padding: 12px;
+    background: rgba(139, 92, 246, 0.08);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    border-radius: 8px;
+    color: #e2e8f0;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s ease;
+}
+
+.text-preset-card:hover {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: rgba(139, 92, 246, 0.4);
+    transform: translateY(-2px);
+}
+
+.preset-preview {
+    display: block;
+    line-height: 1.2;
+}
+
+.preset-desc {
+    font-size: 10px;
+    color: rgba(148, 163, 184, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.panel-divider-small {
+    height: 1px;
+    background: rgba(139, 92, 246, 0.1);
+    margin: 16px 0;
+}
+
+.text-add-btn.simple {
+    margin-top: 8px;
+    justify-content: center;
+    border-style: dashed;
+    background: transparent;
+}
+
+.tip-icon {
+    font-size: 14px;
+}
+
+/* Drawer Hint */
+.drawer-hint {
+    margin-top: 16px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    font-size: 11px;
+    color: rgba(148, 163, 184, 0.6);
+    text-align: center;
+}
+
+/* Focus States */
+.panel-btn:focus-visible,
+.shape-card:focus-visible,
+.text-add-btn:focus-visible {
+    outline: 2px solid #8b5cf6;
+    outline-offset: 2px;
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-height: 600px) {
+    .panel-buttons {
+        padding: 8px 6px;
+        gap: 8px;
+    }
+
+    .shapes-grid {
+        gap: 8px;
+    }
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+    .shape-card {
+        border-width: 2px;
+    }
+
+    .shape-card:hover {
+        border-color: #fff;
+    }
+}

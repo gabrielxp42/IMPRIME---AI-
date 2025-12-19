@@ -1,0 +1,307 @@
+/* Chat de Teste - Janela Flutuante */
+
+.test-chat-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    backdrop-filter: blur(5px);
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.test-chat-window {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 20px;
+    width: 90%;
+    max-width: 600px;
+    height: 80vh;
+    max-height: 700px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.3s ease-out;
+    overflow: hidden;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.test-chat-header {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.test-chat-header h3 {
+    margin: 0;
+    color: white;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.test-chat-header small {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 12px;
+    display: block;
+    margin-top: 4px;
+}
+
+.test-chat-close {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.test-chat-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: rotate(90deg);
+}
+
+.test-chat-error {
+    background: rgba(220, 38, 38, 0.9);
+    color: white;
+    padding: 12px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    font-size: 14px;
+}
+
+.test-chat-info {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 12px 20px;
+    display: flex;
+    gap: 20px;
+    font-size: 12px;
+    color: white;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    flex-wrap: wrap;
+}
+
+.test-chat-info div {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.test-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.test-chat-messages::-webkit-scrollbar {
+    width: 8px;
+}
+
+.test-chat-messages::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+.test-chat-messages::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+}
+
+.test-chat-messages::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.test-chat-message {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 80%;
+    animation: messageSlide 0.3s ease-out;
+}
+
+@keyframes messageSlide {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.test-chat-message.user {
+    align-self: flex-end;
+}
+
+.test-chat-message.ai {
+    align-self: flex-start;
+}
+
+.test-chat-message-role {
+    font-size: 11px;
+    font-weight: 600;
+    opacity: 0.8;
+    color: white;
+    padding: 0 4px;
+}
+
+.test-chat-message-text {
+    background: rgba(255, 255, 255, 0.95);
+    color: #1a202c;
+    padding: 12px 16px;
+    border-radius: 16px;
+    font-size: 14px;
+    line-height: 1.5;
+    word-wrap: break-word;
+}
+
+.test-chat-message.user .test-chat-message-text {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.test-chat-message.ai .test-chat-message-text {
+    border-bottom-left-radius: 4px;
+}
+
+.test-chat-message.loading .test-chat-message-text {
+    background: rgba(255, 255, 255, 0.3);
+    color: white;
+}
+
+.test-chat-message-time {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.6);
+    padding: 0 4px;
+}
+
+.dots::after {
+    content: '...';
+    animation: dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes dots {
+
+    0%,
+    20% {
+        content: '.';
+    }
+
+    40% {
+        content: '..';
+    }
+
+    60%,
+    100% {
+        content: '...';
+    }
+}
+
+.test-chat-input-area {
+    display: flex;
+    gap: 8px;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.test-chat-input {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: white;
+    font-size: 14px;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.test-chat-input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.test-chat-input:focus {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.test-chat-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.test-chat-send {
+    background: rgba(255, 255, 255, 0.9);
+    border: none;
+    border-radius: 12px;
+    width: 48px;
+    height: 48px;
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.test-chat-send:hover:not(:disabled) {
+    background: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.test-chat-send:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.test-chat-footer {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 12px 20px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 11px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}

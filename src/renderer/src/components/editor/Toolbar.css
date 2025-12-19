@@ -1,0 +1,489 @@
+/* Toolbar Premium Híbrida - "Big Buttons" Glassmorphism */
+/* Com Tooltips Premium, Acessibilidade e Micro-interações */
+
+/* Container Principal */
+.editor-toolbar.glass-panel-large {
+    height: 86px;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    z-index: 50;
+
+    /* GLASSMORPHISM ROXO ESCURO */
+    background: linear-gradient(180deg,
+            rgba(30, 27, 75, 0.98) 0%,
+            rgba(15, 23, 42, 0.98) 100%);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+
+    border-bottom: 2px solid rgba(139, 92, 246, 0.15);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+    color: #f1f5f9;
+    transition: all 0.3s ease;
+}
+
+/* ===== TOOLTIP PREMIUM ===== */
+.tooltip-wrapper {
+    position: relative;
+    display: inline-flex;
+}
+
+.premium-tooltip {
+    position: fixed;
+    z-index: 99999;
+    padding: 8px 14px;
+    background: rgba(15, 15, 20, 0.95);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 10px;
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    white-space: nowrap;
+    pointer-events: none;
+    animation: tooltipFadeIn 0.15s ease-out;
+}
+
+.premium-tooltip::before {
+    content: '';
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: rgba(15, 15, 20, 0.95);
+    border-left: 1px solid rgba(139, 92, 246, 0.3);
+    border-top: 1px solid rgba(139, 92, 246, 0.3);
+    transform: rotate(45deg);
+}
+
+.premium-tooltip.bottom::before {
+    top: -6px;
+    left: 50%;
+    margin-left: -5px;
+}
+
+.premium-tooltip.top::before {
+    bottom: -6px;
+    left: 50%;
+    margin-left: -5px;
+    transform: rotate(225deg);
+}
+
+.tooltip-text {
+    color: #e2e8f0;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.tooltip-shortcut {
+    background: rgba(139, 92, 246, 0.25);
+    color: #a78bfa;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+@keyframes tooltipFadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+/* ===== SHORTCUTS MODAL ===== */
+.shortcuts-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.shortcuts-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+}
+
+.shortcuts-content {
+    position: relative;
+    background: linear-gradient(180deg, rgba(30, 27, 75, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 20px;
+    padding: 24px 32px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow:
+        0 25px 80px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.05);
+    animation: modalSlideIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.shortcuts-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.shortcuts-header svg {
+    color: #a78bfa;
+}
+
+.shortcuts-header h3 {
+    flex: 1;
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: #f1f5f9;
+}
+
+.shortcuts-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.shortcuts-close:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+}
+
+.shortcuts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.shortcut-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s;
+}
+
+.shortcut-item:hover {
+    background: rgba(139, 92, 246, 0.1);
+    border-color: rgba(139, 92, 246, 0.2);
+}
+
+.shortcut-item kbd {
+    background: rgba(139, 92, 246, 0.2);
+    color: #a78bfa;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    min-width: 70px;
+    text-align: center;
+}
+
+.shortcut-item span {
+    color: #cbd5e1;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+/* Divisores */
+.divider-vertical.large {
+    width: 2px;
+    height: 48px;
+    background: linear-gradient(to bottom, transparent, rgba(139, 92, 246, 0.25), transparent);
+    margin: 0 4px;
+}
+
+.spacer-flex {
+    flex: 1;
+}
+
+/* Grupos */
+.toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 100%;
+}
+
+.tools-group-large {
+    gap: 12px;
+}
+
+.actions-group {
+    gap: 12px;
+    padding-right: 12px;
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.action-row {
+    display: flex;
+    gap: 6px;
+}
+
+/* ===== BOTÕES GRANDES ===== */
+.toolbar-btn {
+    border: 1px solid transparent;
+    background: transparent;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    border-radius: 12px;
+}
+
+/* Focus states para acessibilidade */
+.toolbar-btn:focus-visible {
+    outline: none;
+    box-shadow:
+        0 0 0 2px rgba(139, 92, 246, 0.5),
+        0 0 0 4px rgba(139, 92, 246, 0.2);
+}
+
+.toolbar-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+/* Botão Grande (Main Tools) */
+.large-btn {
+    height: 68px;
+    min-width: 100px;
+    padding: 0 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Conteúdo Interno do Botão */
+.btn-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.large-btn span {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    color: #cbd5e1;
+}
+
+/* Hover Effects (Botões Grandes) */
+.large-btn:hover:not(:disabled) {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: rgba(139, 92, 246, 0.3);
+    color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+
+.large-btn:hover:not(:disabled) span {
+    color: #ffffff;
+}
+
+/* Estado Ativo (Selecionado) */
+.large-btn.active {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(124, 58, 237, 0.15));
+    border-color: #8b5cf6;
+    color: #a78bfa;
+    box-shadow:
+        0 0 20px rgba(139, 92, 246, 0.25),
+        inset 0 0 0 1px rgba(139, 92, 246, 0.2);
+}
+
+.large-btn.active span {
+    color: #a78bfa;
+}
+
+/* ===== BOTÃO NOVO DOCUMENTO ===== */
+.big-icon-btn {
+    height: 68px;
+    width: 68px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+}
+
+.big-icon-btn .btn-content {
+    gap: 4px;
+}
+
+.big-icon-btn span {
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.big-icon-btn:hover:not(:disabled) {
+    border-color: #8b5cf6;
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    border-style: solid;
+}
+
+/* ===== BOTÕES DE AÇÃO (Médios) ===== */
+.icon-medium {
+    width: 42px;
+    height: 32px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    color: #94a3b8;
+}
+
+.icon-medium:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+.icon-medium.danger:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+}
+
+/* ===== EXPORTAR (Gigante) ===== */
+.primary-action-large {
+    height: 68px;
+    padding: 0 32px;
+    background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+    border-radius: 12px;
+    color: white;
+    box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
+    border: 1px solid rgba(167, 139, 250, 0.3);
+}
+
+.primary-action-large .btn-content {
+    flex-direction: row;
+    gap: 12px;
+}
+
+.primary-action-large span {
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+}
+
+.primary-action-large:hover:not(:disabled) {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 25px rgba(124, 58, 237, 0.5);
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+}
+
+/* Pulse animation for export button */
+.primary-action-large::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed, #8b5cf6);
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.primary-action-large:hover::after {
+    opacity: 0.5;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 0.5;
+    }
+
+    50% {
+        transform: scale(1.05);
+        opacity: 0.3;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Responsividade */
+@media (max-width: 1100px) {
+    .large-btn {
+        min-width: 80px;
+        padding: 0 10px;
+    }
+
+    .large-btn span {
+        font-size: 10px;
+    }
+
+    .primary-action-large {
+        padding: 0 20px;
+    }
+
+    .shortcuts-grid {
+        grid-template-columns: 1fr;
+    }
+}

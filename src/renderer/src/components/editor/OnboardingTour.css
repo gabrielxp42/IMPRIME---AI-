@@ -1,0 +1,281 @@
+/* OnboardingTour.css - Tour Interativo Premium */
+
+.onboarding-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 100000;
+    /* Fundo escuro com blur */
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    animation: fadeIn 0.3s ease-out;
+    pointer-events: none;
+    /* Eventos passam pelo furo do clip-path */
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.onboarding-overlay.has-highlight {
+    pointer-events: all;
+    /* Bloqueia cliques fora do furo */
+    /* Cria o "buraco" no blur e no fundo escuro */
+    clip-path: polygon(0% 0%,
+            0% 100%,
+            100% 100%,
+            100% 0%,
+            0% 0%,
+            var(--hole-x) var(--hole-y),
+            calc(var(--hole-x) + var(--hole-w)) var(--hole-y),
+            calc(var(--hole-x) + var(--hole-w)) calc(var(--hole-y) + var(--hole-h)),
+            var(--hole-x) calc(var(--hole-y) + var(--hole-h)),
+            var(--hole-x) var(--hole-y));
+}
+
+.onboarding-tour-ui {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 100001;
+    pointer-events: none;
+    /* Deixa passar para o furo e overlay */
+}
+
+.onboarding-tour-ui>* {
+    pointer-events: all;
+    /* Tooltip e botões são interativos */
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Spotlight Effect - Cria buraco transparente no overlay escuro */
+.spotlight-cutout {
+    position: absolute;
+    border-radius: 12px;
+    background: transparent;
+    /* Apenas a borda e o brilho pulsante */
+    box-shadow:
+        0 0 30px rgba(139, 92, 246, 0.5),
+        inset 0 0 0 3px rgba(139, 92, 246, 0.6);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+    animation: pulse-glow 2s ease-in-out infinite;
+    z-index: 100001;
+}
+
+
+@keyframes pulse-glow {
+
+    0%,
+    100% {
+        box-shadow: 0 0 30px rgba(139, 92, 246, 0.4), inset 0 0 0 3px rgba(139, 92, 246, 0.5);
+    }
+
+    50% {
+        box-shadow: 0 0 50px rgba(139, 92, 246, 0.8), inset 0 0 0 3px rgba(139, 92, 246, 0.9);
+    }
+}
+
+
+/* Tooltip Card */
+.tour-tooltip {
+    position: absolute;
+    width: 420px;
+    max-width: 90vw;
+    background: linear-gradient(180deg, rgba(30, 27, 75, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    border-radius: 20px;
+    padding: 28px 32px;
+    box-shadow:
+        0 25px 80px rgba(0, 0, 0, 0.6),
+        0 0 0 1px rgba(255, 255, 255, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    animation: tooltipSlideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 10;
+}
+
+@keyframes tooltipSlideIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.9);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+/* Close Button */
+.tour-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tour-close:hover {
+    background: rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    transform: rotate(90deg);
+}
+
+/* Icon */
+.tour-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 20px;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(236, 72, 153, 0.2));
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #a78bfa;
+}
+
+/* Title */
+.tour-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin: 0 0 12px;
+    text-align: center;
+    line-height: 1.3;
+}
+
+/* Description */
+.tour-description {
+    font-size: 15px;
+    color: #94a3b8;
+    line-height: 1.6;
+    text-align: center;
+    margin: 0 0 24px;
+}
+
+/* Progress Dots */
+.tour-progress {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 24px;
+}
+
+.progress-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0;
+}
+
+.progress-dot:hover {
+    background: rgba(255, 255, 255, 0.4);
+    transform: scale(1.2);
+}
+
+.progress-dot.active {
+    background: linear-gradient(135deg, #8b5cf6, #ec4899);
+    transform: scale(1.3);
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+}
+
+.progress-dot.completed {
+    background: #8b5cf6;
+}
+
+/* Navigation Buttons */
+.tour-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+}
+
+.tour-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border-radius: 10px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tour-btn.primary {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    color: white;
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+}
+
+.tour-btn.primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(139, 92, 246, 0.5);
+}
+
+.tour-btn.secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tour-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #f1f5f9;
+}
+
+/* Hint */
+.tour-hint {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.3);
+    text-align: center;
+    margin-top: 16px;
+    margin-bottom: 0;
+}
+
+/* Responsive */
+@media (max-width: 500px) {
+    .tour-tooltip {
+        width: 95vw;
+        padding: 24px;
+    }
+
+    .tour-title {
+        font-size: 18px;
+    }
+
+    .tour-description {
+        font-size: 14px;
+    }
+
+    .tour-btn {
+        padding: 10px 16px;
+        font-size: 13px;
+    }
+}

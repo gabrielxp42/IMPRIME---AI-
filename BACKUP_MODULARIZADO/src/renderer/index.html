@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spot White Automation</title>
+</head>
+
+<body>
+  <div id="global-error-display"
+    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1e1e24; color: #ff5555; padding: 20px; z-index: 9999; overflow: auto; font-family: monospace;">
+    <h2>Critical Error</h2>
+    <pre id="global-error-content"></pre>
+    <button onclick="window.location.reload()"
+      style="padding: 10px 20px; background: #555; color: white; border: none; cursor: pointer; margin-top: 20px;">Reload</button>
+  </div>
+  <script>
+    function showError(title, details) {
+      document.getElementById('global-error-display').style.display = 'block';
+      document.getElementById('global-error-content').innerText += `=== ${title} ===\n${details}\n\n`;
+    }
+
+    window.onerror = function (message, source, lineno, colno, error) {
+      showError('JavaScript Error', `Message: ${message}\nSource: ${source}:${lineno}:${colno}\nStack: ${error ? error.stack : 'N/A'}`);
+    };
+
+    window.onunhandledrejection = function (event) {
+      showError('Unhandled Promise Rejection', `Reason: ${event.reason}`);
+    };
+
+    // Capturar erros de carregamento de recursos (404 em scripts/css)
+    window.addEventListener('error', function (event) {
+      if (event.target && (event.target.tagName === 'SCRIPT' || event.target.tagName === 'LINK' || event.target.tagName === 'IMG')) {
+        showError('Resource Load Error', `Failed to load resource: ${event.target.src || event.target.href}\nType: ${event.target.tagName}`);
+      }
+    }, true);
+  </script>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>

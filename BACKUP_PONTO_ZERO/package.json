@@ -1,0 +1,55 @@
+{
+  "name": "spot-white-automation",
+  "version": "1.0.1",
+  "description": "Automação Photoshop - Spot White com interface moderna",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:react\" \"npm run dev:electron\"",
+    "dev:react": "vite",
+    "dev:electron": "wait-on http://localhost:5173 && electron .",
+    "clean": "node scripts/clean.js",
+    "prebuild": "npm run clean",
+    "build": "npm run clean && npm run build:main && npm run build:renderer && npm run build:python && npm run build:python-highprecision && npm run copy:python && electron-builder",
+    "build:main": "tsc -p tsconfig.main.json && node scripts/copy-python-script.js",
+    "build:renderer": "vite build",
+    "build:python": "pyinstaller --onefile --name background_remover --clean src/main/background_remover.py --distpath dist",
+    "build:python-highprecision": "pyinstaller --onefile --name background_remover_highprecision --clean src/main/background_remover_highprecision.py --distpath dist",
+    "copy:python": "node scripts/copy-python-script.js",
+    "preview": "vite preview",
+    "setup:python": "echo Por favor, instale Python 3.x e execute: pip install pywin32"
+  },
+  "keywords": [
+    "photoshop",
+    "automation",
+    "spot-white"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@types/uuid": "^10.0.0",
+    "axios": "^1.13.2",
+    "konva": "^9.3.14",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^3.11.174",
+    "react": "^18.2.0",
+    "react-compare-slider": "^3.1.0",
+    "react-dom": "^18.2.0",
+    "react-konva": "^18.2.10",
+    "sharp": "^0.33.1",
+    "use-image": "^1.1.4",
+    "uuid": "^13.0.0"
+  }
+}

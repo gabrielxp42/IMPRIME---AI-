@@ -1,0 +1,171 @@
+.crop-tool-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 10, 30, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.crop-container {
+    position: relative;
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: #000;
+}
+
+.crop-mask {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+}
+
+.crop-selection {
+    position: absolute;
+    border: 2px solid #00f3ff;
+    cursor: move;
+    box-shadow: 0 0 15px rgba(0, 243, 255, 0.3), inset 0 0 15px rgba(0, 243, 255, 0.1);
+    overflow: hidden;
+}
+
+/* Deixar a imagem visível apenas no crop */
+.crop-selection::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    /* Truque: herdar o background do pai mas ajustar offset */
+    background-image: inherit;
+    background-size: inherit;
+    background-position: inherit;
+    /* Isso vai ser ajustado dinamicamente ou fixo? */
+    display: none;
+    /* Simplificando para o MVP: apenas grid visual */
+}
+
+/* Grid Lines */
+.crop-grid {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+}
+
+.grid-line {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.grid-line.v1 {
+    left: 33.33%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+}
+
+.grid-line.v2 {
+    left: 66.66%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+}
+
+.grid-line.h1 {
+    top: 33.33%;
+    left: 0;
+    right: 0;
+    height: 1px;
+}
+
+.grid-line.h2 {
+    top: 66.66%;
+    left: 0;
+    right: 0;
+    height: 1px;
+}
+
+/* Handles */
+.crop-handle {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: #00f3ff;
+    border: 2px solid #fff;
+    border-radius: 2px;
+}
+
+.crop-handle.nw {
+    top: -6px;
+    left: -6px;
+    cursor: nw-resize;
+}
+
+.crop-handle.ne {
+    top: -6px;
+    right: -6px;
+    cursor: ne-resize;
+}
+
+.crop-handle.sw {
+    bottom: -6px;
+    left: -6px;
+    cursor: sw-resize;
+}
+
+.crop-handle.se {
+    bottom: -6px;
+    right: -6px;
+    cursor: se-resize;
+}
+
+.crop-actions {
+    position: absolute;
+    bottom: -60px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 15px;
+    white-space: nowrap;
+}
+
+.crop-actions button {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.btn-cancel {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.btn-apply {
+    background: linear-gradient(135deg, #00f3ff, #0066ff);
+    color: #fff;
+    box-shadow: 0 4px 15px rgba(0, 243, 255, 0.4);
+}
+
+.btn-apply:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 243, 255, 0.6);
+}

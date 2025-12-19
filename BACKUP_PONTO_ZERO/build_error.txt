@@ -1,0 +1,57 @@
+﻿
+> spot-white-automation@1.0.1 build:renderer
+> vite build
+
+node.exe : [33mThe CJS build of Vite's Node API is deprecated. See 
+https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more 
+details.[39m
+No linha:1 caractere:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([33mThe CJS bu...e details.[39m:String) [], 
+    RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[36mvite v5.4.21 [32mbuilding for production...[36m[39m
+transforming...
+(node:38988) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/Direct
+/Videos/automa%C3%A7%C3%A3o%20photoshop2/src/renderer/postcss.config.js is not specified 
+and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance 
+overhead.
+To eliminate this warning, add "type": "module" to C:\Users\Direct\Videos\automa├º├úo 
+photoshop2\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[32mÔ£ô[39m 19 modules transformed.
+[31mx[39m Build failed in 360ms
+[31merror during build:
+[31m[vite:esbuild] Transform failed with 1 error:
+C:/Users/Direct/Videos/automa├º├úo 
+photoshop2/src/renderer/src/components/UpscaylView.tsx:159:9: ERROR: Expected "finally" 
+but found ";"[31m
+file: [36mC:/Users/Direct/Videos/automa├º├úo 
+photoshop2/src/renderer/src/components/UpscaylView.tsx:159:9[31m
+[33m
+[33mExpected "finally" but found ";"[33m
+157|                  setMessage({ type: 'error', text: 'Erro ao abrir no Photoshop' });
+158|              }
+159|          };
+   |           ^
+160|  
+161|          return (
+[31m
+    at failureErrorWithLog (C:\Users\Direct\Videos\automa├º├úo 
+photoshop2\node_modules\esbuild\lib\main.js:1472:15)
+    at C:\Users\Direct\Videos\automa├º├úo 
+photoshop2\node_modules\esbuild\lib\main.js:755:50
+    at responseCallbacks.<computed> (C:\Users\Direct\Videos\automa├º├úo 
+photoshop2\node_modules\esbuild\lib\main.js:622:9)
+    at handleIncomingPacket (C:\Users\Direct\Videos\automa├º├úo 
+photoshop2\node_modules\esbuild\lib\main.js:677:12)
+    at Socket.readFromStdout (C:\Users\Direct\Videos\automa├º├úo 
+photoshop2\node_modules\esbuild\lib\main.js:600:7)
+    at Socket.emit (node:events:518:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)[39m

@@ -1,0 +1,400 @@
+/* FLOATING SMART BAR - Liquid Glass CSS (iOS 26 Style) */
+.floating-smart-bar {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    margin-top: -20px;
+    display: flex;
+    align-items: center;
+    background: rgba(15, 23, 42, 0.65);
+    /* Lighter Glass as requested */
+    backdrop-filter: blur(25px) saturate(180%);
+    -webkit-backdrop-filter: blur(25px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    padding: 6px 10px;
+    gap: 0;
+    box-shadow:
+        0 15px 35px -10px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    z-index: 5000;
+    pointer-events: auto;
+    user-select: none;
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    height: 48px;
+}
+
+/* Divisor com efeito de vidro */
+.bar-divider {
+    width: 1px;
+    height: 24px;
+    background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.15), transparent);
+    margin: 0 10px;
+}
+
+/* GRUPO 1: DIMENSÕES */
+.smart-group {
+    display: flex;
+    align-items: center;
+    height: 100%;
+}
+
+.compact-input-pair {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 4px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s;
+}
+
+.mini-input {
+    width: 38px;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: center;
+    outline: none;
+    padding: 0;
+}
+
+.lock-toggle {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: all 0.2s;
+}
+
+.lock-toggle.active {
+    color: #a855f7;
+    filter: drop-shadow(0 0 5px rgba(168, 85, 247, 0.5));
+}
+
+.unit-tag {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 800;
+    margin-left: 2px;
+}
+
+.dim-label {
+    font-size: 10px;
+    color: #a855f7;
+    font-weight: 800;
+    text-transform: uppercase;
+    opacity: 0.8;
+}
+
+/* EXPANDABLE TOOLS LOGIC */
+.expandable-tool {
+    position: relative;
+}
+
+.tool-trigger-btn {
+    height: 36px;
+    min-width: 40px;
+    padding: 0 10px;
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    color: #cbd5e1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tool-trigger-btn:hover,
+.expandable-tool.active .tool-trigger-btn {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    transform: scale(1.05);
+}
+
+/* Novo container para alinhar ícone e texto */
+.trigger-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 100%;
+}
+
+.type-icon {
+    opacity: 0.8;
+    margin-bottom: -1px;
+    /* Ajuste fino de baseline */
+}
+
+.color-circle {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    transition: transform 0.2s;
+}
+
+.current-val {
+    font-size: 11px;
+    font-weight: 800;
+    background: #a855f7;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 6px;
+    box-shadow: 0 4px 10px rgba(168, 85, 247, 0.3);
+}
+
+/* O Painel "Liquid Glass" Dropdown */
+.tool-dropdown-panel {
+    position: absolute;
+    bottom: calc(100% + 15px);
+    left: 50%;
+    transform: translateX(-50%) translateY(15px) scale(0.9);
+    background: rgba(20, 25, 40, 0.6);
+    backdrop-filter: blur(45px) saturate(210%);
+    -webkit-backdrop-filter: blur(45px) saturate(210%);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 20px;
+    padding: 14px;
+    min-width: 180px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    /* Efeito Squish / Elastic */
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Ponte Invisível para Hover */
+.tool-dropdown-panel::before {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    height: 30px;
+    /* Cobre o gap entre botão e painel */
+    background: transparent;
+}
+
+/* Mostrar quando ativo */
+.expandable-tool.active .tool-dropdown-panel {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0) scale(1);
+}
+
+/* ========== PAINEL DE TEXTO ========== */
+.text-panel {
+    min-width: 240px;
+    /* Mais espaço */
+}
+
+.panel-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+.panel-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 0.5px;
+    min-width: 50px;
+}
+
+.font-size-input-field {
+    width: 60px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: white;
+    padding: 4px 8px;
+    font-size: 13px;
+    text-align: center;
+}
+
+.custom-font-input {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: white;
+    padding: 6px 10px;
+    font-size: 12px;
+    outline: none;
+    transition: all 0.2s;
+    min-width: 0;
+    /* Permite encolher em flexbox */
+}
+
+.custom-font-input:focus {
+    border-color: rgba(168, 85, 247, 0.5);
+    /* Roxo */
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.panel-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 4px 0;
+}
+
+.panel-row.fonts {
+    /* Grid de botões de fonte */
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 180px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.style-toggles {
+    display: flex;
+    gap: 4px;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    padding-left: 8px;
+    margin-left: 4px;
+}
+
+.font-opt {
+    flex: 1;
+    /* Cresce */
+    min-width: 80px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.font-opt:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.font-opt.active {
+    background: rgba(139, 92, 246, 0.2);
+    border-color: rgba(139, 92, 246, 0.5);
+    color: #a78bfa;
+}
+
+.font-opt.icon-only {
+    flex: 0 0 auto;
+    min-width: 30px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+.panel-row.align {
+    background: rgba(255, 255, 255, 0.06);
+    padding: 4px;
+    border-radius: 12px;
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+}
+
+.panel-row.align button {
+    flex: 1;
+    height: 32px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    transition: 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.panel-row.align button.active {
+    background: #fff;
+    color: #a855f7;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* CORES GRID */
+.colors-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.color-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.color-dot:hover {
+    transform: scale(1.15) rotate(5deg);
+    border-color: #fff;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.native-color {
+    grid-column: span 4;
+    width: 100%;
+    height: 32px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    margin-top: 4px;
+}
+
+/* ACTIONS */
+.icon-action-btn {
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.icon-action-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    transform: translateY(-2px);
+}
+
+.icon-action-btn.danger:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.icon-action-btn.wand:hover {
+    background: linear-gradient(135deg, #a855f7, #d946ef);
+    color: white;
+    box-shadow: 0 8px 20px rgba(168, 85, 247, 0.4);
+}

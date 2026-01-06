@@ -14,29 +14,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
   maximizeWindow: () => ipcRenderer.invoke('window-maximize'),
   closeWindow: () => ipcRenderer.invoke('window-close'),
-  // Novas funções de halftone e utilitários
-  processHalftoneIndexColor: (inputFile: string, outputFile: string, lpi: number, mode?: 'auto' | 'manual') =>
-    ipcRenderer.invoke('process-halftone-indexcolor', inputFile, outputFile, lpi, mode),
-  processHalftoneHybrid: (inputFile: string, outputFile: string, lpi: number, mode?: 'auto' | 'manual') =>
-    ipcRenderer.invoke('process-halftone-hybrid', inputFile, outputFile, lpi, mode),
-  processHalftoneDirectDTF: (inputFile: string | null) =>
-    ipcRenderer.invoke('process-halftone-direct-dtf', inputFile),
-  processHalftoneDirectDTFLight: (inputFile: string | null) =>
-    ipcRenderer.invoke('process-halftone-direct-dtf-light', inputFile),
-  prepareBlackBackground: (inputFile: string, outputFile: string) =>
-    ipcRenderer.invoke('prepare-black-background', inputFile, outputFile),
-  prepareWhiteBackground: (inputFile: string, outputFile: string) =>
-    ipcRenderer.invoke('prepare-white-background', inputFile, outputFile),
-  removeBlackColor: (inputFile: string, outputFile: string) =>
-    ipcRenderer.invoke('remove-black-color', inputFile, outputFile),
-  removeWhiteColor: (inputFile: string, outputFile: string) =>
-    ipcRenderer.invoke('remove-white-color', inputFile, outputFile),
-  installColorProfile: (profilePath: string) =>
-    ipcRenderer.invoke('install-color-profile', profilePath),
-  installPatterns: (patternPath: string) =>
-    ipcRenderer.invoke('install-patterns', patternPath),
-  improveImage: (inputFile: string, outputFile: string, version: 1 | 2 | 3) =>
-    ipcRenderer.invoke('improve-image', inputFile, outputFile, version),
+  // Funções de halftone e utilitários (OTIMIZADAS)
+  processHalftone: (options: { lpi: number, type: 'RT' | 'HB' | 'NORMAL' | 'GENERIC_DARK' | 'GENERIC_LIGHT' }) =>
+    ipcRenderer.invoke('process-halftone', options),
+  removeColor: (color: 'black' | 'white') =>
+    ipcRenderer.invoke('remove-color', color),
+  processSpotWhiteExtracted: () =>
+    ipcRenderer.invoke('process-spotwhite-extracted'),
   getActiveDocument: () =>
     ipcRenderer.invoke('get-active-document'),
   // Funções de upscaling
@@ -56,10 +40,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openInPhotoshop: (filePath: string) => ipcRenderer.invoke('open-in-photoshop', filePath),
   // Ler arquivo como data URL (para preview de imagens)
   readFileAsDataUrl: (filePath: string) => ipcRenderer.invoke('read-file-as-data-url', filePath),
+  getThumbnail: (filePath: string) => ipcRenderer.invoke('get-thumbnail', filePath),
+  getPreviewImage: (filePath: string) => ipcRenderer.invoke('get-preview-image', filePath),
   getSystemFonts: () => ipcRenderer.invoke('get-system-fonts'),
   // Kie.ai Handlers
   kieAiProcess: (options: any) => ipcRenderer.invoke('kie-ai-process', options),
   kieAiStatus: (taskId: string, apiKey: string) => ipcRenderer.invoke('kie-ai-status', taskId, apiKey),
+  ping: () => ipcRenderer.invoke('ping'),
   // Event listeners
   on: (channel: string, callback: (...args: any[]) => void) => {
     ipcRenderer.on(channel, (_event, ...args) => callback(...args));
@@ -81,22 +68,15 @@ export type ElectronAPI = {
   minimizeWindow?: () => Promise<void>;
   maximizeWindow?: () => Promise<void>;
   closeWindow?: () => Promise<void>;
-  // Novas funções de halftone e utilitários
-  processHalftoneIndexColor: (inputFile: string, outputFile: string, lpi: number, mode?: 'auto' | 'manual') => Promise<{ success: boolean; outputPath?: string; error?: string }>;
-  processHalftoneHybrid: (inputFile: string, outputFile: string, lpi: number, mode?: 'auto' | 'manual') => Promise<{ success: boolean; outputPath?: string; error?: string }>;
-  prepareBlackBackground: (inputFile: string, outputFile: string) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
-  prepareWhiteBackground: (inputFile: string, outputFile: string) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
-  removeBlackColor: (inputFile: string, outputFile: string) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
-  removeWhiteColor: (inputFile: string, outputFile: string) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
-  installColorProfile: (profilePath: string) => Promise<{ success: boolean; message: string }>;
-  installPatterns: (patternPath: string) => Promise<{ success: boolean; message: string }>;
-  improveImage: (inputFile: string, outputFile: string, version: 1 | 2 | 3) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
+  // Funções de halftone e utilitários (OTIMIZADAS)
+  processHalftone: (options: { lpi: number, type: 'RT' | 'HB' | 'NORMAL' | 'GENERIC_DARK' | 'GENERIC_LIGHT' }) => Promise<{ success: boolean; error?: string }>;
+  removeColor: (color: 'black' | 'white') => Promise<{ success: boolean; error?: string }>;
+  processSpotWhiteExtracted: () => Promise<{ success: boolean; error?: string }>;
   getActiveDocument: () => Promise<{ success: boolean; path?: string; name?: string; error?: string }>;
   upscaleImage: (inputPath: string, outputPath: string, model: string, scale?: number) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
   listUpscaleModels: () => Promise<string[]>;
   checkUpscaleAvailability: () => Promise<{ available: boolean; error?: string }>;
-  processHalftoneDirectDTF: (inputFile: string | null) => Promise<{ success: boolean; error?: string }>;
-  processHalftoneDirectDTFLight: (inputFile: string | null) => Promise<{ success: boolean; error?: string }>;
+
   cancelProcessing: () => Promise<{ success: boolean }>;
   exportLogs: () => Promise<{ success: boolean; path?: string; error?: string }>;
   removeBackground: (inputPath: string, outputPath: string, removeInternalBlacks?: boolean, blackThreshold?: number) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
@@ -104,9 +84,13 @@ export type ElectronAPI = {
   removeBackgroundBase64: (base64Data: string, highPrecision?: boolean) => Promise<{ success: boolean; resultBase64?: string; error?: string }>;
   openLogsDir: () => Promise<{ success: boolean; error?: string }>;
   openInPhotoshop: (filePath: string) => Promise<void>;
+  readFileAsDataUrl: (filePath: string) => Promise<{ success: boolean; dataUrl?: string; error?: string }>;
   getSystemFonts: () => Promise<string[]>;
-  kieAiProcess: (options: { prompt: string, imageBase64?: string, maskBase64?: string, model?: string, apiKey: string }) => Promise<{ success: boolean; imageBase64?: string; imageUrl?: string; error?: string }>;
+  kieAiProcess: (options: { prompt: string, imageBase64?: string, additionalImages?: string[], maskBase64?: string, model?: string, apiKey: string }) => Promise<{ success: boolean; imageBase64?: string; imageUrl?: string; error?: string }>;
+
   kieAiStatus: (taskId: string, apiKey: string) => Promise<any>;
+  getThumbnail: (filePath: string) => Promise<{ success: boolean; dataUrl?: string; error?: string }>;
+  getPreviewImage: (filePath: string) => Promise<{ success: boolean; dataUrl?: string; error?: string }>;
   on: (channel: string, callback: (...args: any[]) => void) => void;
   removeListener: (channel: string, callback: (...args: any[]) => void) => void;
 };

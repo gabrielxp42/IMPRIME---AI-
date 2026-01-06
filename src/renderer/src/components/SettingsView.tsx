@@ -1,24 +1,14 @@
 import React from 'react';
 import './SettingsView.css';
 
-interface Config {
-  minDPI: number;
-  maxDPI: number;
-  widthCm: number;
-  widthTolerance: number;
-  minHeightCm: number;
-}
-
 interface SettingsViewProps {
-  config: Config;
-  onConfigChange: (config: Config) => void;
   geminiApiKey: string;
   onGeminiApiKeyChange: (key: string) => void;
   kieAiApiKey: string;
   onKieAiApiKeyChange: (key: string) => void;
 }
 
-const SettingsView: React.FC<SettingsViewProps> = ({ config, onConfigChange, geminiApiKey, onGeminiApiKeyChange, kieAiApiKey, onKieAiApiKeyChange }) => {
+const SettingsView: React.FC<SettingsViewProps> = ({ geminiApiKey, onGeminiApiKeyChange, kieAiApiKey, onKieAiApiKeyChange }) => {
   return (
     <div className="settings-view">
       <div className="settings-header">
@@ -95,119 +85,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ config, onConfigChange, gem
           </div>
         </div>
 
-        <div className="settings-section">
-          <h3>Configurações de Validação</h3>
-          <div className="settings-grid">
-            <div className="setting-item">
-              <label>
-                <span className="setting-label">DPI Mínimo</span>
-                <span className="setting-description">Valor mínimo de DPI aceito</span>
-              </label>
-              <input
-                type="number"
-                value={config.minDPI}
-                onChange={(e) => onConfigChange({ ...config, minDPI: parseInt(e.target.value) || 200 })}
-                className="setting-input"
-                min="72"
-                max="600"
-              />
-            </div>
 
-            <div className="setting-item">
-              <label>
-                <span className="setting-label">DPI Máximo</span>
-                <span className="setting-description">Valor máximo de DPI aceito</span>
-              </label>
-              <input
-                type="number"
-                value={config.maxDPI}
-                onChange={(e) => onConfigChange({ ...config, maxDPI: parseInt(e.target.value) || 300 })}
-                className="setting-input"
-                min="200"
-                max="1200"
-              />
-            </div>
-
-            <div className="setting-item">
-              <label>
-                <span className="setting-label">Largura Máxima (cm)</span>
-                <span className="setting-description">Largura máxima permitida (TETO) - não pode ser ultrapassada</span>
-              </label>
-              <input
-                type="number"
-                value={config.widthCm}
-                onChange={(e) => onConfigChange({ ...config, widthCm: parseFloat(e.target.value) || 58 })}
-                className="setting-input"
-                min="10"
-                max="200"
-                step="0.1"
-              />
-            </div>
-
-            <div className="setting-item setting-item-full">
-              <label>
-                <span className="setting-label">Tolerância de Largura</span>
-                <span className="setting-description">
-                  Tolerância permitida para BAIXO: {config.widthTolerance.toFixed(1)}cm
-                  <br />
-                  <small style={{ color: '#a0a0a0', fontSize: '11px' }}>
-                    A largura máxima ({config.widthCm.toFixed(1)}cm) é o TETO e não pode ser ultrapassada.
-                    <br />
-                    Arquivos serão aceitos se a largura estiver entre <strong>{(config.widthCm - config.widthTolerance).toFixed(1)}cm</strong> e <strong>{config.widthCm.toFixed(1)}cm</strong> (máximo)
-                  </small>
-                </span>
-              </label>
-              <div className="tolerance-slider-container">
-                <input
-                  type="range"
-                  min="0.5"
-                  max="5"
-                  step="0.1"
-                  value={config.widthTolerance}
-                  onChange={(e) => onConfigChange({ ...config, widthTolerance: parseFloat(e.target.value) })}
-                  className="tolerance-slider"
-                />
-                <div className="slider-labels">
-                  <span>0.5cm</span>
-                  <span>2.5cm</span>
-                  <span>5.0cm</span>
-                </div>
-                <div className="slider-value-display">
-                  <span className="slider-value">{config.widthTolerance.toFixed(1)}cm</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="setting-item">
-              <label>
-                <span className="setting-label">Altura Mínima (cm)</span>
-                <span className="setting-description">Altura mínima aceita em centímetros</span>
-              </label>
-              <input
-                type="number"
-                value={config.minHeightCm}
-                onChange={(e) => onConfigChange({ ...config, minHeightCm: parseFloat(e.target.value) || 50 })}
-                className="setting-input"
-                min="10"
-                max="500"
-                step="0.1"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="settings-section">
-          <h3>Padrões de Arquivo</h3>
-          <div className="settings-info">
-            <p>Os arquivos processados seguirão o formato:</p>
-            <div className="format-example">
-              <code>(MEDIDA) - (NOME_CLIENTE) - (NOME_ARQUIVO).tiff</code>
-            </div>
-            <p className="format-note">
-              A medida é calculada automaticamente baseada na altura do arquivo (1M, 2M, etc.)
-            </p>
-          </div>
-        </div>
 
         <div className="settings-section">
           <h3>Logs e Suporte</h3>

@@ -66,9 +66,10 @@
 
 /* ========== EXPANDED PANEL (Glassmorphism) ========== */
 .sidebar-panel {
-    width: 290px;
-    background: rgba(12, 12, 18, 0.6);
-    /* Glassy Panel */
+    width: 320px;
+    /* Wider panel for better grid layout */
+    background: rgba(12, 12, 18, 0.85);
+    /* Slightly darker/more opaque for readability */
     backdrop-filter: blur(45px) saturate(220%);
     -webkit-backdrop-filter: blur(45px) saturate(220%);
     border-right: 1px solid rgba(255, 255, 255, 0.1);
@@ -78,6 +79,131 @@
     display: flex;
     flex-direction: column;
     animation: slideInGlass 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    flex-shrink: 0;
+    /* Prevent shrinking */
+    z-index: 90;
+}
+
+/* ... existing animations ... */
+
+/* Effects Grid System */
+.effects-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* Prevent column collapse */
+    gap: 12px;
+    margin-bottom: 24px;
+    padding-bottom: 8px;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.effect-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease-out;
+    position: relative;
+    overflow: hidden;
+    height: auto;
+    min-height: 100px;
+    box-sizing: border-box;
+}
+
+.effect-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.effect-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(139, 92, 246, 0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.effect-card:hover::before {
+    opacity: 1;
+}
+
+.effect-card .icon-wrapper {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+    color: #e5e7eb;
+    transition: all 0.3s;
+    flex-shrink: 0;
+}
+
+.effect-card:hover .icon-wrapper {
+    background: rgba(139, 92, 246, 0.2);
+    color: #fff;
+    transform: scale(1.05);
+}
+
+.effect-card h4 {
+    margin: 0 0 4px 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #f3f4f6;
+    z-index: 1;
+    line-height: 1.3;
+}
+
+.effect-card p {
+    margin: 0;
+    font-size: 11px;
+    color: #9ca3af;
+    line-height: 1.35;
+    z-index: 1;
+}
+
+/* Featured Card (Full Width) */
+.effect-card.featured {
+    grid-column: span 2;
+    flex-direction: row;
+    align-items: center;
+    min-height: auto;
+    padding: 16px;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(59, 130, 246, 0.05));
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    margin-top: 4px;
+}
+
+.effect-card.featured .icon-wrapper {
+    margin-bottom: 0;
+    margin-right: 14px;
+    width: 42px;
+    /* Slightly larger icon area */
+    height: 42px;
+    background: rgba(139, 92, 246, 0.3);
+    color: #fff;
+}
+
+.effect-card.featured .content-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.effect-card.featured:hover {
+    border-color: rgba(139, 92, 246, 0.8);
+    box-shadow: 0 0 25px rgba(139, 92, 246, 0.25);
+    transform: translateY(-2px) scale(1.01);
 }
 
 @keyframes slideInGlass {
@@ -153,6 +279,9 @@
     flex: 1;
     overflow-y: auto;
     padding: 16px;
+    display: block !important;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .panel-content::-webkit-scrollbar {
@@ -199,11 +328,129 @@
     margin: 20px 0;
 }
 
-/* Shapes Grid */
-.shapes-grid {
+
+/* ========== PREMIUM EFFECTS GRID V2 ========== */
+.effects-layout-v2 {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.effects-grid-v2 {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    width: 100%;
+}
+
+.premium-effect-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
     gap: 10px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    min-height: 110px;
+}
+
+.premium-effect-card:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(139, 92, 246, 0.4);
+    transform: translateY(-4px);
+    box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.4);
+}
+
+.premium-effect-card .icon-box {
+    width: 34px;
+    height: 34px;
+    background: rgba(139, 92, 246, 0.1);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #a78bfa;
+    transition: all 0.3s;
+}
+
+.premium-effect-card:hover .icon-box {
+    background: #8b5cf6;
+    color: white;
+    transform: scale(1.1);
+}
+
+.premium-effect-card h4 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: #f3f4f6;
+    letter-spacing: -0.2px;
+}
+
+.premium-effect-card p {
+    margin: 0;
+    font-size: 11px;
+    color: rgba(156, 163, 175, 0.8);
+    line-height: 1.4;
+}
+
+/* Featured IA Card */
+.premium-effect-card.featured-ai {
+    grid-column: span 2;
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(217, 119, 6, 0.05) 100%);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    flex-direction: row;
+    align-items: center;
+    min-height: auto;
+    padding: 18px;
+}
+
+.premium-effect-card.featured-ai .icon-box {
+    background: rgba(251, 191, 36, 0.2);
+    color: #fbbf24;
+    width: 44px;
+    height: 44px;
+    margin-right: 4px;
+}
+
+.premium-effect-card.featured-ai h4 {
+    font-size: 15px;
+    color: #fbbf24;
+}
+
+.premium-effect-card.featured-ai:hover {
+    border-color: #fbbf24;
+    box-shadow: 0 0 25px rgba(251, 191, 36, 0.2);
+}
+
+.premium-effect-card.featured-ai .card-meta {
+    margin-left: auto;
+    background: rgba(251, 191, 36, 0.1);
+    color: #fbbf24;
+    font-size: 9px;
+    font-weight: 800;
+    padding: 4px 8px;
+    border-radius: 6px;
+    text-transform: uppercase;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .shape-item {
@@ -396,9 +643,9 @@
 }
 
 
-.shape-item.hovered {
-    animation: pulse 1s ease-in-out infinite;
-}
+
+
+
 
 /* ========== LIBRARY STYLES ========== */
 .library-container {

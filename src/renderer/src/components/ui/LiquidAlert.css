@@ -1,0 +1,127 @@
+.liquid-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    z-index: 10000;
+    /* Acima de tudo */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.liquid-alert {
+    background: rgba(20, 20, 35, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow:
+        0 20px 50px rgba(0, 0, 0, 0.5),
+        inset 0 0 20px rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    padding: 30px;
+    max-width: 450px;
+    width: 90%;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    animation: scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Borda Neon baseada no tipo */
+.liquid-alert.success {
+    border-color: rgba(69, 243, 133, 0.5);
+    box-shadow: 0 0 30px rgba(69, 243, 133, 0.15);
+}
+
+.liquid-alert.error {
+    border-color: rgba(255, 71, 87, 0.5);
+    box-shadow: 0 0 30px rgba(255, 71, 87, 0.15);
+}
+
+.liquid-alert.info {
+    border-color: rgba(74, 144, 226, 0.5);
+    box-shadow: 0 0 30px rgba(74, 144, 226, 0.15);
+}
+
+.liquid-icon {
+    font-size: 48px;
+    margin-bottom: 20px;
+    display: inline-block;
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.3));
+}
+
+.liquid-alert h3 {
+    color: #fff;
+    margin: 0 0 10px 0;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.liquid-alert p {
+    color: #ccc;
+    font-size: 16px;
+    line-height: 1.6;
+    margin-bottom: 30px;
+}
+
+.liquid-button {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 12px 30px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-width: 120px;
+    -webkit-app-region: no-drag;
+    /* Vacina garantida */
+}
+
+/* Cores de botão específicas */
+.liquid-alert.success .liquid-button {
+    background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+    border: none;
+}
+
+.liquid-alert.error .liquid-button {
+    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    border: none;
+}
+
+.liquid-alert.info .liquid-button {
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    border: none;
+}
+
+.liquid-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}

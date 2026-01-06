@@ -1,0 +1,87 @@
+.ruler {
+    display: block;
+    user-select: none;
+    pointer-events: none;
+    /* Deixar cliques passarem para guides se necessário */
+}
+
+.ruler-horizontal {
+    width: 100%;
+    height: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ruler-vertical {
+    height: 100%;
+    width: 20px;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Layout container para as réguas e o canvas */
+.editor-workspace {
+    display: grid;
+    grid-template-columns: 20px 1fr;
+    grid-template-rows: 20px 1fr;
+    width: 100%;
+    height: 100%;
+    background-color: #0f172a;
+    overflow: hidden;
+}
+
+.ruler-corner {
+    grid-column: 1;
+    grid-row: 1;
+    background-color: #1e293b;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 20;
+}
+
+.ruler-top-container {
+    grid-column: 2;
+    grid-row: 1;
+    overflow: hidden;
+    /* Oculta scrollbar da régua */
+    background-color: #1e293b;
+    z-index: 10;
+}
+
+.ruler-left-container {
+    grid-column: 1;
+    grid-row: 2;
+    overflow: hidden;
+    background-color: #1e293b;
+    z-index: 10;
+}
+
+.canvas-scroller {
+    grid-column: 2;
+    grid-row: 2;
+    overflow: auto;
+    /* Scroll real acontece aqui */
+    position: relative;
+    background-color: #020617;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Scrollbars customizadas */
+.canvas-scroller::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.canvas-scroller::-webkit-scrollbar-track {
+    background: #0f172a;
+}
+
+.canvas-scroller::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 5px;
+    border: 2px solid #0f172a;
+}
+
+.canvas-scroller::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+}

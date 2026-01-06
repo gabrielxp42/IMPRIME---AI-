@@ -1,27 +1,56 @@
+/* --- VACINA GLOBAL DE INTERATIVIDADE ELECTRON --- */
+/* Garante que botões SEMPRE recebam cliques, mesmo em áreas arrastáveis */
+button,
+a,
+input,
+select,
+textarea,
+[role="button"],
+.interactive,
+.effect-button {
+  -webkit-app-region: no-drag !important;
+  cursor: pointer;
+  /* Garante feedback visual */
+}
+
+/* Define a base do app */
 .app {
   display: flex;
   flex-direction: column;
   width: 100vw;
   height: 100vh;
-  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+  /* ... resto do css ... */
+  background: radial-gradient(circle at top left, #1a1033 0%, #0f0f1e 100%);
   color: var(--text-primary);
   overflow: hidden;
   position: relative;
 }
 
-/* Animated background pattern */
+/* Liquid Glass Background - Brand Contrast */
 .app::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: -20%;
+  left: -10%;
+  width: 120%;
+  height: 120%;
   background-image:
-    radial-gradient(circle at 20% 50%, rgba(102, 126, 234, 0.05) 0%, transparent 50%),
-    radial-gradient(circle at 80% 80%, rgba(118, 75, 162, 0.05) 0%, transparent 50%);
+    radial-gradient(circle at 15% 25%, rgba(168, 85, 247, 0.25) 0%, transparent 45%),
+    radial-gradient(circle at 85% 75%, rgba(236, 72, 153, 0.2) 0%, transparent 45%);
+  filter: blur(120px);
   pointer-events: none;
   z-index: 0;
+  animation: bgFloat 25s ease-in-out infinite alternate;
+}
+
+@keyframes bgFloat {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  100% {
+    transform: translate(-2%, 2%) scale(1.05);
+  }
 }
 
 .app-content {
@@ -31,14 +60,28 @@
   height: calc(100vh - 30px);
   position: relative;
   z-index: 1;
+  background: rgba(15, 23, 42, 0.3);
+}
+
+.main-viewport {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  /* Correção essencial para evitar overflow flex */
 }
 
 /* Responsive adjustments */
+/* Desativado pois a sidebar já é colapsável e column layout quebra apps desktop complexos
 @media (max-width: 1024px) {
   .app-content {
     flex-direction: column;
   }
 }
+*/
 
 @media (max-width: 768px) {
   .app {

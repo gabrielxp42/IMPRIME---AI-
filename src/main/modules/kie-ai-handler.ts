@@ -20,95 +20,99 @@ export interface KieAiTask {
 export interface KieAiGenerateOptions {
     prompt: string;
     imageBase64?: string;
+    additionalImages?: string[]; // Imagens adicionais (base64) para composição
     maskBase64?: string;
     model?: string;
     aspectRatio?: string;
 }
+
 
 export class KieAiHandler {
     private apiKey: string;
     private baseUrl = 'https://api.kie.ai/api/v1';
 
     constructor(apiKey: string) {
+        console.log('[KieAI] KieAiHandler v3 Loaded (Catbox/0x0 Edition)');
         this.apiKey = apiKey;
     }
 
+
     /**
      * Faz upload de uma imagem base64 para obter URL pública
-     * Usa o serviço gratuito imgbb.com
+     * Usa Catbox.moe com User-Agent para evitar bloqueios
      */
     private async uploadImage(base64Data: string): Promise<string | null> {
-        try {
-            // Remover prefixo data:image se existir
-            let cleanBase64 = base64Data;
-            if (base64Data.includes(',')) {
-                cleanBase64 = base64Data.split(',')[1];
-            }
+        console.log(`[KieAI] Starting upload (size: ${base64Data.length} chars)`);
 
-            // ImgBB API (free, no account needed for basic uploads)
-            const formData = new URLSearchParams();
-            formData.append('image', cleanBase64);
+        // Delay aleatório
+        await this.sleep(300 + Math.random() * 500);
 
-            const response = await fetch('https://api.imgbb.com/1/upload?key=00000000000000000000000000000000', {
-                method: 'POST',
-                body: formData,
-            });
-
-            if (!response.ok) {
-                // Fallback: usar freeimage.host
-                return await this.uploadToFreeImageHost(cleanBase64);
-            }
-
-            const data = await response.json() as any;
-            if (data.success && data.data?.url) {
-                console.log('[KieAI] Image uploaded to imgbb:', data.data.url);
-                return data.data.url;
-            }
-
-            return await this.uploadToFreeImageHost(cleanBase64);
-        } catch (error) {
-            logger.error('[KieAI] Failed to upload image:', error);
-            return await this.uploadToFreeImageHost(base64Data);
+        // Tentar Catbox primeiro
+        const urlCatbox = await this.uploadToCatbox(base64Data);
+        if (urlCatbox) {
+            console.log('[KieAI] Upload success (Catbox):', urlCatbox);
+            return urlCatbox;
         }
+
+        // Fallback para 0x0.st
+        console.log('[KieAI] Catbox failed, trying 0x0.st...');
+        const url0x0 = await this.uploadTo0x0(base64Data);
+        if (url0x0) {
+            console.log('[KieAI] Upload success (0x0.st):', url0x0);
+            return url0x0;
+        }
+
+        return null;
     }
 
     /**
-     * Fallback: Upload para freeimage.host (não requer API key)
+     * Upload para Catbox.moe
      */
-    private async uploadToFreeImageHost(base64Data: string): Promise<string | null> {
+    private async uploadToCatbox(base64Data: string): Promise<string | null> {
         try {
             let cleanBase64 = base64Data;
             if (base64Data.includes(',')) {
                 cleanBase64 = base64Data.split(',')[1];
             }
 
-            // freeimage.host aceita uploads públicos
-            const formData = new URLSearchParams();
-            formData.append('source', cleanBase64);
-            formData.append('type', 'base64');
-            formData.append('action', 'upload');
+            const buffer = Buffer.from(cleanBase64, 'base64');
+            const boundary = '----CatboxBoundary' + Math.random().toString(36).substring(2);
 
-            const response = await fetch('https://freeimage.host/api/1/upload?key=6d207e02198a847aa98d0a2a901485a5', {
+            const body = Buffer.concat([
+                Buffer.from(`--${boundary}\r\n`),
+                Buffer.from(`Content-Disposition: form-data; name="reqtype"\r\n\r\nfileupload\r\n`),
+                Buffer.from(`--${boundary}\r\n`),
+                Buffer.from(`Content-Disposition: form-data; name="fileToUpload"; filename="image.png"\r\n`),
+                Buffer.from(`Content-Type: image/png\r\n\r\n`),
+                buffer,
+                Buffer.from(`\r\n--${boundary}--\r\n`),
+            ]);
+
+            const response = await fetch('https://catbox.moe/user/api.php', {
                 method: 'POST',
-                body: formData,
+                headers: {
+                    'Content-Type': `multipart/form-data; boundary=${boundary}`,
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                },
+                body: body,
             });
 
-            const data = await response.json() as any;
-            if (data.status_code === 200 && data.image?.url) {
-                console.log('[KieAI] Image uploaded to freeimage.host:', data.image.url);
-                return data.image.url;
+            if (response.ok) {
+                const url = await response.text();
+                if (url.startsWith('http')) {
+                    return url.trim();
+                }
             }
-
-            // Último fallback: 0x0.st (mais simples)
-            return await this.uploadTo0x0(base64Data);
+            return null;
         } catch (error) {
-            logger.error('[KieAI] freeimage.host upload failed:', error);
-            return await this.uploadTo0x0(base64Data);
+            logger.error('[KieAI] Catbox upload error:', error);
+            return null;
         }
     }
 
+
     /**
-     * Último fallback: 0x0.st
+     * Upload para 0x0.st
      */
     private async uploadTo0x0(base64Data: string): Promise<string | null> {
         try {
@@ -117,10 +121,7 @@ export class KieAiHandler {
                 cleanBase64 = base64Data.split(',')[1];
             }
 
-            // Converter base64 para Buffer
             const buffer = Buffer.from(cleanBase64, 'base64');
-
-            // 0x0.st aceita multipart/form-data
             const boundary = '----FormBoundary' + Math.random().toString(36).substring(2);
             const body = Buffer.concat([
                 Buffer.from(`--${boundary}\r\n`),
@@ -140,48 +141,62 @@ export class KieAiHandler {
 
             if (response.ok) {
                 const url = await response.text();
-                console.log('[KieAI] Image uploaded to 0x0.st:', url.trim());
+                console.log('[KieAI] Uploaded to 0x0.st:', url.trim());
                 return url.trim();
             }
-
-            logger.error('[KieAI] All upload services failed');
             return null;
         } catch (error) {
-            logger.error('[KieAI] 0x0.st upload failed:', error);
+            logger.error('[KieAI] 0x0.st upload error:', error);
             return null;
         }
     }
+
 
     /**
      * Cria uma tarefa de geração/edição de imagem
      */
     async createTask(options: KieAiGenerateOptions): Promise<{ success: boolean; taskId?: string; error?: string }> {
-        const { prompt, imageBase64, model = 'nano-banana' } = options;
+        const { prompt, imageBase64, additionalImages, model = 'nano-banana' } = options;
 
         try {
             const hasInputImage = !!imageBase64;
+            const allImages: string[] = [];
 
             // Determinar modelo: se tem imagem, usar nano-banana-edit
             let finalModel = model;
-            let imageUrl: string | undefined;
 
+            // Upload de todas as imagens
             if (hasInputImage && imageBase64) {
-                // Para edição, precisamos fazer upload da imagem
-                console.log('[KieAI] Uploading image for editing...');
+                console.log('[KieAI] Uploading primary image...');
                 const uploadedUrl = await this.uploadImage(imageBase64);
-
                 if (uploadedUrl) {
-                    imageUrl = uploadedUrl;
-                    finalModel = 'nano-banana-edit';
-                    console.log('[KieAI] Using nano-banana-edit with URL:', imageUrl);
-                } else {
-                    // Se upload falhar, usar nano-banana com inputImage
-                    console.log('[KieAI] Upload failed, falling back to nano-banana');
-                    finalModel = 'nano-banana';
+                    allImages.push(uploadedUrl);
                 }
             }
 
-            logger.info(`[KieAI] Criando tarefa com modelo: ${finalModel}, hasImage: ${hasInputImage}`);
+            // Upload de imagens adicionais
+            if (additionalImages && additionalImages.length > 0) {
+                console.log(`[KieAI] Uploading ${additionalImages.length} additional images...`);
+                for (const [idx, img] of additionalImages.entries()) {
+                    console.log(`[KieAI] Uploading additional image #${idx + 1}...`);
+                    const uploadedUrl = await this.uploadImage(img);
+                    if (uploadedUrl) {
+                        allImages.push(uploadedUrl);
+                        console.log(`[KieAI] Additional image #${idx + 1} uploaded: ${uploadedUrl}`);
+                    } else {
+                        console.error(`[KieAI] Failed to upload additional image #${idx + 1}`);
+                    }
+                }
+            }
+
+
+            // Se temos imagens, usar nano-banana-edit
+            if (allImages.length > 0) {
+                finalModel = 'nano-banana-edit';
+                console.log(`[KieAI] Using nano-banana-edit with ${allImages.length} image(s)`);
+            }
+
+            logger.info(`[KieAI] Criando tarefa com modelo: ${finalModel}, totalImages: ${allImages.length}`);
 
             // Construir body baseado no modelo
             const requestBody: any = {
@@ -192,9 +207,9 @@ export class KieAiHandler {
                 },
             };
 
-            // Para nano-banana-edit, usar image_urls e opcionalmente mask_urls
-            if (finalModel === 'nano-banana-edit' && imageUrl) {
-                requestBody.input.image_urls = [imageUrl];
+            // Para nano-banana-edit, usar image_urls
+            if (finalModel === 'nano-banana-edit' && allImages.length > 0) {
+                requestBody.input.image_urls = allImages;
 
                 // Se temos máscara, fazer upload dela também
                 if (options.maskBase64) {
@@ -219,11 +234,20 @@ export class KieAiHandler {
                 requestBody.input.aspect_ratio = options.aspectRatio || '1:1';
             }
 
-            console.log('[KieAI] REQUEST:', JSON.stringify({
-                model: requestBody.model,
-                hasImageUrls: !!requestBody.input.image_urls,
-                hasInputImage: !!requestBody.input.inputImage
-            }));
+
+            console.log('[KieAI] --- FINAL PAYLOAD CHECK ---');
+            console.log('[KieAI] Model:', requestBody.model);
+            console.log('[KieAI] Prompt:', requestBody.input.prompt);
+            console.log('[KieAI] Image URLs:', JSON.stringify(requestBody.input.image_urls));
+            console.log('[KieAI] ---------------------------');
+
+            // Salvar payload debug para inspeção
+            try {
+                const debugPath = path.join(app.getPath('userData'), 'kie_last_request.json');
+                fs.writeFileSync(debugPath, JSON.stringify(requestBody, null, 2));
+                console.log('[KieAI] Request salvo em:', debugPath);
+            } catch (e) { /* ignore */ }
+
 
             const response = await fetch(`${this.baseUrl}/jobs/createTask`, {
                 method: 'POST',
@@ -241,16 +265,6 @@ export class KieAiHandler {
             }
 
             const data = await response.json() as any;
-            console.log('[KieAI] RAW RESPONSE:', JSON.stringify(data, null, 2));
-
-            // Verificar erros conhecidos da API
-            if (data.code === 402) {
-                return { success: false, error: 'Créditos insuficientes na conta Kie.ai. Acesse kie.ai para recarregar.' };
-            }
-
-            if (data.code !== 200) {
-                return { success: false, error: data.msg || `Erro da API: código ${data.code}` };
-            }
 
             // Debug: Gravar resposta em arquivo
             try {

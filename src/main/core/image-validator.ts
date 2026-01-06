@@ -20,6 +20,8 @@ export interface ValidationResult {
 }
 
 export class ImageValidator {
+  private metadataCache = new Map<string, ValidationResult['info']>();
+
   async validate(
     filePath: string,
     config: {
@@ -33,20 +35,22 @@ export class ImageValidator {
     const errors: string[] = [];
     let info: ValidationResult['info'] = null;
 
-    const ext = filePath.toLowerCase().split('.').pop();
-
-    if (ext === 'png') {
-      info = await this.validatePNG(filePath);
-    } else if (ext === 'tiff' || ext === 'tif') {
-      info = await this.validateTIFF(filePath);
-    } else if (ext === 'pdf') {
-      info = await this.validatePDF(filePath);
+    // Tentar obter do cache primeiro
+    if (this.metadataCache.has(filePath)) {
+      info = this.metadataCache.get(filePath)!;
     } else {
-      return {
-        valid: false,
-        errors: ['Formato de arquivo não suportado. Use PNG, TIFF ou PDF.'],
-        info: null,
-      };
+      const ext = filePath.toLowerCase().split('.').pop();
+      if (ext === 'png') {
+        info = await this.validatePNG(filePath);
+      } else if (ext === 'tiff' || ext === 'tif') {
+        info = await this.validateTIFF(filePath);
+      } else if (ext === 'pdf') {
+        info = await this.validatePDF(filePath);
+      }
+
+      if (info) {
+        this.metadataCache.set(filePath, info);
+      }
     }
 
     if (!info) {
@@ -68,25 +72,21 @@ export class ImageValidator {
       errors.push('Não foi possível determinar o DPI da imagem.');
     }
 
-    // Validar largura (com tolerância configurável)
-    // A tolerância só permite valores MENORES que o máximo (o máximo é o TETO)
-    // Exemplo: Se máximo é 58cm e tolerância é 2cm, aceita de 56cm até 58cm (não aceita 60cm)
+    // Validar largura
     if (info.widthCm) {
-      const widthTolerance = config.widthTolerance || 2.5; // Fallback para 2.5cm se não especificado
+      const widthTolerance = config.widthTolerance || 2.5;
       const minWidth = config.widthCm - widthTolerance;
-      const maxWidth = config.widthCm; // O máximo é o TETO, não pode ser ultrapassado
-      
+      const maxWidth = config.widthCm;
+
       if (info.widthCm > maxWidth) {
         errors.push(
           `Largura acima do máximo permitido. Atual: ${info.widthCm.toFixed(2)}cm, Máximo: ${maxWidth.toFixed(2)}cm`
         );
       } else if (info.widthCm < minWidth) {
         errors.push(
-          `Largura abaixo do mínimo permitido. Atual: ${info.widthCm.toFixed(2)}cm, Mínimo: ${minWidth.toFixed(2)}cm (Máximo: ${maxWidth.toFixed(2)}cm, Tolerância: ${widthTolerance.toFixed(1)}cm)`
+          `Largura abaixo do mínimo permitido. Atual: ${info.widthCm.toFixed(2)}cm, Mínimo: ${minWidth.toFixed(2)}cm`
         );
       }
-    } else {
-      errors.push('Não foi possível determinar a largura da imagem.');
     }
 
     // Validar altura mínima
@@ -96,8 +96,6 @@ export class ImageValidator {
           `Altura abaixo do mínimo. Atual: ${info.heightCm.toFixed(2)}cm, Mínimo: ${config.minHeightCm}cm`
         );
       }
-    } else {
-      errors.push('Não foi possível determinar a altura da imagem.');
     }
 
     return {
@@ -111,7 +109,7 @@ export class ImageValidator {
     try {
       const metadata = await sharp(filePath).metadata();
       const dpi = metadata.density || 72;
-      
+
       // Converter pixels para cm (assumindo DPI)
       const widthCm = (metadata.width! / dpi) * 2.54;
       const heightCm = (metadata.height! / dpi) * 2.54;
@@ -140,7 +138,7 @@ export class ImageValidator {
     try {
       const metadata = await sharp(filePath).metadata();
       const dpi = metadata.density || 72;
-      
+
       // Converter pixels para cm (assumindo DPI)
       const widthCm = (metadata.width! / dpi) * 2.54;
       const heightCm = (metadata.height! / dpi) * 2.54;
@@ -167,7 +165,7 @@ export class ImageValidator {
   }
 
   /**
-   * Detecta o bounding box do conteúdo real (não-transparente) em uma imagem PNG
+   * Detecta o bounding box do conteúdo real (não-transparente) usando sharp.trim()
    */
   private async detectContentBounds(filePath: string, dpi: number): Promise<{
     heightCm: number;
@@ -176,67 +174,43 @@ export class ImageValidator {
     emptySpacePercentage: number;
   } | null> {
     try {
-      // Ler dados da imagem
-      const image = sharp(filePath);
-      const { data, info } = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-      
-      const width = info.width;
-      const height = info.height;
-      const channels = info.channels; // RGBA = 4 canais
-      
-      // Encontrar bounding box do conteúdo não-transparente
-      let minX = width;
-      let minY = height;
-      let maxX = 0;
-      let maxY = 0;
-      let hasContent = false;
+      // Usar sharp para obter metadados originais
+      const metadata = await sharp(filePath).metadata();
+      const originalWidth = metadata.width || 0;
+      const originalHeight = metadata.height || 0;
 
-      // Percorrer pixels para encontrar conteúdo não-transparente
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          const idx = (y * width + x) * channels;
-          const alpha = data[idx + 3]; // Canal alpha (transparência)
-          
-          // Se pixel não é totalmente transparente (alpha > 0)
-          if (alpha > 0) {
-            hasContent = true;
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
-          }
-        }
-      }
+      if (originalWidth === 0 || originalHeight === 0) return null;
 
-      // Se não encontrou conteúdo, retornar null
-      if (!hasContent || minX > maxX || minY > maxY) {
-        return null;
-      }
+      // Usar trim() para encontrar o bounding box do conteúdo
+      // A operação trim retorna a imagem cortada, então as dimensões dela são o conteúdo real
+      // É muito mais rápido que iterar pixel a pixel
+      const trimmedInfo = await sharp(filePath)
+        .trim()
+        .toBuffer({ resolveWithObject: true });
 
-      // Calcular dimensões do conteúdo real
-      const contentWidthPx = maxX - minX + 1;
-      const contentHeightPx = maxY - minY + 1;
-      
+      const contentWidthPx = trimmedInfo.info.width;
+      const contentHeightPx = trimmedInfo.info.height;
+
       const contentWidthCm = (contentWidthPx / dpi) * 2.54;
       const contentHeightCm = (contentHeightPx / dpi) * 2.54;
 
       // Calcular área total vs área do conteúdo
-      const totalArea = width * height;
+      const totalArea = originalWidth * originalHeight;
       const contentArea = contentWidthPx * contentHeightPx;
-      const emptySpacePercentage = ((totalArea - contentArea) / totalArea) * 100;
+      const emptySpacePercentage = totalArea > 0 ? ((totalArea - contentArea) / totalArea) * 100 : 0;
 
-      // Considerar espaço vazio significativo se > 25%
-      const hasEmptySpace = emptySpacePercentage > 25;
+      // Considerar espaço vazio significativo se > 20%
+      const hasEmptySpace = emptySpacePercentage > 20;
 
       return {
         heightCm: contentHeightCm,
         widthCm: contentWidthCm,
         hasEmptySpace,
-        emptySpacePercentage: Math.round(emptySpacePercentage * 10) / 10, // Arredondar para 1 decimal
+        emptySpacePercentage: Math.round(emptySpacePercentage * 10) / 10,
       };
     } catch (error) {
-      console.warn('Erro ao detectar conteúdo real:', error);
-      // Em caso de erro, retornar null (não bloquear validação)
+      console.warn('Erro ao detectar conteúdo real (trim):', error);
+      // Fallback: assumir que é tudo conteúdo se falhar o trim (ex: imagem sem alpha)
       return null;
     }
   }
@@ -246,19 +220,19 @@ export class ImageValidator {
       const pdfBytes = fs.readFileSync(filePath);
       const pdfDoc = await PDFDocument.load(pdfBytes);
       const pages = pdfDoc.getPages();
-      
+
       if (pages.length === 0) {
         return null;
       }
 
       const firstPage = pages[0];
       const { width, height } = firstPage.getSize();
-      
+
       // PDF geralmente usa pontos (1 ponto = 1/72 polegada)
       // Converter para cm
       const widthCm = (width / 72) * 2.54;
       const heightCm = (height / 72) * 2.54;
-      
+
       // Tentar obter DPI do PDF (pode não estar disponível)
       // Assumir 300 DPI como padrão para PDFs de alta qualidade
       const dpi = 300;

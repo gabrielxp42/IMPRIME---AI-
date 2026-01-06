@@ -65,11 +65,37 @@ export class BackgroundRemovalHandler {
             }
 
             const isDev = !app.isPackaged;
-            let processCmd: string;
+            let processCmd: string = 'python';
             let processArgs: string[];
 
             if (isDev) {
-                processCmd = 'python';
+                // Tenta encontrar o comando python correto no Windows
+                if (process.platform === 'win32') {
+                    const { execSync } = require('child_process');
+                    const { join } = require('path');
+                    const home = process.env.USERPROFILE || '';
+
+                    const commands = [
+                        'py', // Prioridade máxima no Windows (geralmente aponta para o real)
+                        // Caminhos comuns de instalação manual (instalação do winget)
+                        join(home, 'AppData', 'Local', 'Programs', 'Python', 'Python311', 'python.exe'),
+                        join(home, 'AppData', 'Local', 'Programs', 'Python', 'Python312', 'python.exe'),
+                        join(home, 'AppData', 'Local', 'Programs', 'Python', 'Python310', 'python.exe'),
+                        'python',
+                        'python3',
+                    ];
+
+                    for (const cmd of commands) {
+                        try {
+                            execSync(`"${cmd}" --version`, { stdio: 'ignore' });
+                            processCmd = cmd;
+                            break;
+                        } catch (e) {
+                            continue;
+                        }
+                    }
+                }
+
                 processArgs = [
                     this.pythonScriptPath,
                     inputPath,

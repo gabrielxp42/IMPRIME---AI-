@@ -10,17 +10,7 @@ interface FilePreviewModalProps {
 
 type Tool = 'hand' | 'zoom';
 
-// Throttle function para otimizar eventos
-function throttle<T extends (...args: any[]) => void>(func: T, limit: number): T {
-  let inThrottle: boolean;
-  return ((...args: any[]) => {
-    if (!inThrottle) {
-      func(...args);
-      inThrottle = true;
-      setTimeout(() => (inThrottle = false), limit);
-    }
-  }) as T;
-}
+
 
 const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onClose, filePath, fileName }) => {
   const [zoom, setZoom] = useState(1);
@@ -36,8 +26,8 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onClose, fi
   const zoomRef = useRef(1);
   const rafRef = useRef<number | null>(null);
 
-  const MIN_ZOOM = 0.1;
-  const MAX_ZOOM = 5;
+  const MIN_ZOOM = 0.05;
+  const MAX_ZOOM = 20;
   const ZOOM_STEP = 0.1;
 
   // Cores predefinidas para o fundo - memoizado
@@ -51,15 +41,44 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onClose, fi
     '#764ba2', // Roxo escuro
   ], []);
 
-  // Verificar se é imagem - memoizado
-  const isImage = useMemo(() =>
-    filePath.toLowerCase().endsWith('.png') ||
-    filePath.toLowerCase().endsWith('.jpg') ||
-    filePath.toLowerCase().endsWith('.jpeg') ||
-    filePath.toLowerCase().endsWith('.tiff') ||
-    filePath.toLowerCase().endsWith('.tif'),
+
+
+  // Determine format type
+  const isNativeImage = useMemo(() =>
+    ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif', 'svg'].some(ext => filePath.toLowerCase().endsWith('.' + ext)),
     [filePath]
   );
+
+  const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+
+  // Load image source (Native or Generated)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    setImageSrc(null);
+    setLoadingPreview(true);
+
+    if (isNativeImage) {
+      setImageSrc(`media:///${filePath.replace(/\\/g, '/')}`);
+      setLoadingPreview(false);
+    } else {
+      // For TIFF, PDF, PSD, etc., request generated preview
+      window.electronAPI.getPreviewImage(filePath)
+        .then(res => {
+          if (res.success && res.dataUrl) {
+            setImageSrc(res.dataUrl);
+          } else {
+            console.error('Failed to load preview:', res.error);
+          }
+        })
+        .finally(() => setLoadingPreview(false));
+    }
+  }, [filePath, isOpen, isNativeImage]);
+
+  // isImage logic for tool activation: true if we have a source
+  const isImage = !!imageSrc;
+  const isPDF = filePath.toLowerCase().endsWith('.pdf');
 
   // Atualizar refs quando state muda
   useEffect(() => {
@@ -82,11 +101,9 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onClose, fi
     const imgNaturalWidth = img.naturalWidth || img.width;
     const imgNaturalHeight = img.naturalHeight || img.height;
 
-    // Considerar padding do container (24px de cada lado = 48px total)
-    const paddingX = 48; // 24px esquerda + 24px direita
-    const paddingY = 48; // 24px topo + 24px baixo
-    const containerWidth = containerRect.width - paddingX;
-    const containerHeight = containerRect.height - paddingY;
+    // Sem padding agora que é full screen
+    const containerWidth = containerRect.width;
+    const containerHeight = containerRect.height;
 
     // Dimensões da imagem com zoom aplicado
     const imgScaledWidth = imgNaturalWidth * currentZoom;
@@ -155,8 +172,29 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onClose, fi
     setPosition({ x: 0, y: 0 });
   }, []);
 
+  const handleZoomFit = useCallback(() => {
+    const img = imageRef.current;
+    const container = containerRef.current;
+    if (!img || !container) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const padding = 40;
+    const availableWidth = containerRect.width - padding;
+    const availableHeight = containerRect.height - padding;
+
+    const imgWidth = img.naturalWidth || img.width;
+    const imgHeight = img.naturalHeight || img.height;
+
+    const scaleX = availableWidth / imgWidth;
+    const scaleY = availableHeight / imgHeight;
+    const newZoom = Math.min(scaleX, scaleY, 1); // Não dar zoom > 1 no fit
+
+    setZoom(newZoom);
+    setPosition({ x: 0, y: 0 });
+  }, []);
+
   const handleZoomChange = useCallback((newZoom: number) => {
-    setZoom(prev => {
+    setZoom(() => {
       // Se zoom < 1, centralizar
       if (newZoom < 1) {
         setPosition({ x: 0, y: 0 });
@@ -181,7 +219,6 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onClose, fi
     const mouseY = e.clientY - rect.top;
 
     const delta = e.deltaY > 0 ? -ZOOM_STEP * 1.5 : ZOOM_STEP * 1.5;
-    const currentZoom = zoomRef.current;
     const currentPos = positionRef.current;
 
     setZoom(prev => {
@@ -229,7 +266,6 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onClose, fi
 
     const isZoomIn = !e.shiftKey;
     const delta = isZoomIn ? ZOOM_STEP * 2 : -ZOOM_STEP * 2;
-    const currentZoom = zoomRef.current;
     const currentPos = positionRef.current;
 
     setZoom(prev => {
@@ -385,20 +421,8 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onClose, fi
 
   if (!isOpen) return null;
 
-  const isPDF = filePath.toLowerCase().endsWith('.pdf');
-  const imageSrc = useMemo(() =>
-    isImage ? `media:///${filePath.replace(/\\/g, '/')}` : null,
-    [isImage, filePath]
-  );
 
-  // Preload da imagem para melhor performance
-  useEffect(() => {
-    if (!isImage || !imageSrc) return;
 
-    const img = new Image();
-    img.src = imageSrc;
-    // Preload em background
-  }, [isImage, imageSrc]);
 
   // Quando o arquivo mudar, resetar para 100% zoom
   useEffect(() => {
@@ -529,6 +553,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onClose, fi
                     type="range"
                     min={MIN_ZOOM * 100}
                     max={MAX_ZOOM * 100}
+                    step={zoom < 1 ? 1 : 10}
                     value={zoom * 100}
                     onChange={(e) => {
                       const newZoom = parseFloat(e.target.value) / 100;
@@ -560,20 +585,32 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onClose, fi
                 </button>
 
                 <button
+                  className="zoom-button zoom-fit"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleZoomFit();
+                  }}
+                  title="Ajustar à tela"
+                  aria-label="Ajustar à tela"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M15 3h6v6" />
+                    <path d="M9 21H3v-6" />
+                    <path d="M21 3l-7 7" />
+                    <path d="M3 21l7-7" />
+                  </svg>
+                </button>
+
+                <button
                   className="zoom-button zoom-reset"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleZoomReset();
                   }}
-                  title="Resetar zoom (Ctrl+0)"
-                  aria-label="Resetar zoom"
+                  title="Tamanho Real (100%) - Ctrl+0"
+                  aria-label="Tamanho Real"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-                    <path d="M21 3v5h-5" />
-                    <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-                    <path d="M3 21v-5h5" />
-                  </svg>
+                  <span style={{ fontSize: '10px', fontWeight: 'bold' }}>1:1</span>
                 </button>
               </div>
             )}
@@ -637,7 +674,12 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onClose, fi
             backgroundColor,
           }}
         >
-          {isImage && imageSrc ? (
+          {loadingPreview ? (
+            <div className="file-preview-loading" style={{ color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+              <div className="spinner-large" style={{ width: 48, height: 48, border: '4px solid rgba(255,255,255,0.1)', borderTopColor: '#ec4899', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+              <p style={{ marginTop: 16, color: '#94a3b8' }}>Gerando preview de alta qualidade...</p>
+            </div>
+          ) : isImage && imageSrc ? (
             <div
               className="image-container"
               style={{

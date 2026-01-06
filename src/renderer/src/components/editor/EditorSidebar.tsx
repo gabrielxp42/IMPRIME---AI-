@@ -307,57 +307,56 @@ const EditorSidebar: React.FC<EditorSidebarProps> = ({
                             />
                         )}
 
-                        {/* EFEITOS */}
+                        {/* EFEITOS (PREMIUM V2) */}
                         {expandedSection === 'effects' && (
-                            <>
-                                <button
-                                    className="action-btn effect-btn"
-                                    onClick={() => {
-                                        onRemoveBackground();
-                                        setExpandedSection(null);
-                                    }}
-                                >
-                                    <Eraser size={20} />
-                                    <div className="btn-content">
-                                        <span className="btn-title">Remover Fundo</span>
-                                        <span className="btn-description">Remoção inteligente de fundo</span>
+                            <div className="effects-layout-v2">
+                                <div className="effects-grid-v2">
+                                    <div
+                                        className="premium-effect-card"
+                                        onClick={() => {
+                                            onRemoveBackground();
+                                            setExpandedSection(null);
+                                        }}
+                                    >
+                                        <div className="icon-box"><Eraser size={20} /></div>
+                                        <h4>Remover Fundo</h4>
+                                        <p>Transparência instantânea com IA</p>
                                     </div>
-                                    <ChevronRight size={16} className="btn-arrow" />
-                                </button>
-                                <button
-                                    className="action-btn effect-btn"
-                                    onClick={() => {
-                                        onUpscale();
-                                        setExpandedSection(null);
-                                    }}
-                                >
-                                    <Wand2 size={20} />
-                                    <div className="btn-content">
-                                        <span className="btn-title">Melhorar Qualidade</span>
-                                        <span className="btn-description">AI Upscaling 4x</span>
+
+                                    <div
+                                        className="premium-effect-card"
+                                        onClick={() => {
+                                            onUpscale();
+                                            setExpandedSection(null);
+                                        }}
+                                    >
+                                        <div className="icon-box"><Wand2 size={20} /></div>
+                                        <h4>Upscale 4K</h4>
+                                        <p>Aumente a resolução sem perder nitidez</p>
                                     </div>
-                                    <ChevronRight size={16} className="btn-arrow" />
-                                </button>
-                                <button
-                                    className="action-btn effect-btn"
-                                    onClick={() => {
-                                        onAICreative();
-                                        setExpandedSection(null);
-                                    }}
-                                >
-                                    <Sparkles size={20} color="#fbbf24" />
-                                    <div className="btn-content">
-                                        <span className="btn-title">IA Criativa</span>
-                                        <span className="btn-description">Vetorizar e Estilizar com AI</span>
+
+                                    <div
+                                        className="premium-effect-card featured-ai"
+                                        onClick={() => {
+                                            onAICreative();
+                                            setExpandedSection(null);
+                                        }}
+                                    >
+                                        <div className="icon-box"><Sparkles size={24} /></div>
+                                        <div className="card-info">
+                                            <h4>IA Criativa</h4>
+                                            <p>Vetorizar, estilizar e transformar com o poder da IA</p>
+                                        </div>
+                                        <div className="card-meta">Premium</div>
                                     </div>
-                                    <ChevronRight size={16} className="btn-arrow" />
-                                </button>
+                                </div>
+
                                 <div className="panel-divider" />
                                 <div className="coming-soon">
                                     <Sparkles size={20} />
-                                    <span>Filtros em breve...</span>
+                                    <span>Filtros, HDR e ajustes inteligentes em breve...</span>
                                 </div>
-                            </>
+                            </div>
                         )}
 
                         {/* FERRAMENTAS */}

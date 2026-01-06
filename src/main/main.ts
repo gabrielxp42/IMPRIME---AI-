@@ -1,5 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, protocol, net } from 'electron';
 import * as path from 'path';
+import * as fs from 'fs';
+import * as os from 'os';
 import { PhotoshopAutomation } from './modules/spotwhite';
 import { ImageValidator } from './core/image-validator';
 import { GeminiOrchestrator } from './modules/spotwhite';
@@ -10,11 +12,15 @@ import { BackgroundRemovalHighPrecisionHandler } from './modules/upscayl';
 import { KieAiHandler } from './modules/kie-ai-handler';
 import logger from './core/logger';
 
+console.log(`[BOOT] MAIN PROCESS STARTING - ${new Date().toISOString()}`);
+console.log('[BOOT] Verificando Handlers...');
+
 // Instâncias globais
 const photoshopAutomation = new PhotoshopAutomation();
 const upscaylHandler = new UpscaylHandler();
 const backgroundRemovalHandler = new BackgroundRemovalHandler();
 const backgroundRemovalHighPrecisionHandler = new BackgroundRemovalHighPrecisionHandler();
+const validator = new ImageValidator();
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -24,6 +30,7 @@ function createWindow() {
     height: 800,
     minWidth: 900,
     minHeight: 600,
+    title: `Imprime.AI - Build ${new Date().toLocaleTimeString()} (Verifique se é atual)`,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -39,7 +46,23 @@ function createWindow() {
   mainWindow.setMenu(null);
 
   if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
-    mainWindow.loadURL('http://localhost:5173');
+    // Tentar conectar de forma agressiva e logar o resultado
+    const loadDev = async () => {
+      try {
+        console.log('[BOOT] Tentando 5173 (Padrão)...');
+        await mainWindow!.loadURL('http://localhost:5173');
+        console.log('[BOOT] SUCESSO na 5173. Se o código estiver velho, é um ZOMBIE SERVER.');
+      } catch (e) {
+        console.warn('[BOOT] 5173 falhou. Tentando 5174 (Vite Fallback)...');
+        try {
+          await mainWindow!.loadURL('http://localhost:5174');
+          console.log('[BOOT] SUCESSO na 5174. Código deve ser fresco.');
+        } catch (err) {
+          console.error('[BOOT] Falha crítica ao conectar no Vite.');
+        }
+      }
+    };
+    loadDev();
     mainWindow.webContents.openDevTools();
   } else {
     const indexPath = path.join(__dirname, 'renderer/index.html');
@@ -143,6 +166,11 @@ ipcMain.handle('get-system-fonts', async () => {
   }
 });
 
+ipcMain.handle('ping', async () => {
+  console.log('[IPC] Ping recebido!');
+  return { success: true, timestamp: new Date().toISOString() };
+});
+
 // Outros IPC Handlers
 ipcMain.handle('detect-photoshop', async () => {
   const detector = new PhotoshopDetector();
@@ -199,38 +227,88 @@ ipcMain.handle('read-file-as-data-url', async (_event, filePath: string) => {
   }
 });
 
+// Handler for thumbnails (TIFF/PDF/Large Images support)
+ipcMain.handle('get-thumbnail', async (_event, filePath: string) => {
+  try {
+    const sharp = require('sharp');
+    // Resize to reasonable thumbnail size
+    const buffer = await sharp(filePath)
+      .resize({ width: 320, height: 320, fit: 'inside' })
+      .toFormat('jpeg', { quality: 80 })
+      .toBuffer();
+
+    const dataUrl = `data:image/jpeg;base64,${buffer.toString('base64')}`;
+    return { success: true, dataUrl };
+  } catch (error) {
+    console.warn('Erro ao gerar thumbnail:', filePath, error);
+    // Return placeholder or failed status
+    return { success: false, error: error instanceof Error ? error.message : 'Falha na geração' };
+  }
+});
+
+// Handler for full preview (TIFF/PDF support)
+ipcMain.handle('get-preview-image', async (_event, filePath: string) => {
+  try {
+    const sharp = require('sharp');
+
+    // For TIFF, PDF, etc., convert to a high-quality JPG in temp folder
+    // This avoids base64 limits and is much faster for the renderer
+    const tempDir = path.join(os.tmpdir(), 'imprime-ai-previews');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+    // Create a unique filename based on the original file
+    const crypto = require('crypto');
+    const hash = crypto.createHash('md5').update(filePath).digest('hex');
+    const previewPath = path.join(tempDir, `preview_${hash}.jpg`);
+
+    // Only regenerate if it doesn't exist (or we could always regenerate to be sure)
+    // To ensure quality changes apply, let's always regenerate for now
+    await sharp(filePath, { limitInputPixels: false })
+      .resize({ width: 35000, height: 35000, fit: 'inside', withoutEnlargement: true })
+      .toFormat('jpeg', { quality: 100, chromaSubsampling: '4:4:4' })
+      .toFile(previewPath);
+
+    // Return the path but formatted for our media protocol
+    const mediaUrl = `media:///${previewPath.replace(/\\/g, '/')}`;
+    return { success: true, dataUrl: mediaUrl };
+  } catch (error) {
+    console.error('Erro ao gerar preview:', filePath, error);
+    return { success: false, error: error instanceof Error ? error.message : 'Falha no preview' };
+  }
+});
+
 ipcMain.handle('validate-files', async (_event, files: string[], config: {
   minDPI: number;
   maxDPI: number;
   widthCm: number;
   minHeightCm: number;
 }) => {
-  const validator = new ImageValidator();
-  const results = [];
-
-  for (const file of files) {
-    try {
-      const validation = await validator.validate(file, config);
-      results.push({
-        file,
-        valid: validation.valid,
-        errors: validation.errors,
-        info: validation.info,
-      });
-    } catch (error) {
-      results.push({
-        file,
-        valid: false,
-        errors: [`Erro ao validar: ${error instanceof Error ? error.message : 'Erro desconhecido'}`],
-        info: null,
-      });
-    }
-  }
+  // Shared validator instance uses cache for metadata
+  const results = await Promise.all(
+    files.map(async (file) => {
+      try {
+        const validation = await validator.validate(file, config);
+        return {
+          file,
+          valid: validation.valid,
+          errors: validation.errors,
+          info: validation.info,
+        };
+      } catch (error) {
+        return {
+          file,
+          valid: false,
+          errors: [`Erro ao validar: ${error instanceof Error ? error.message : 'Erro desconhecido'}`],
+          info: null,
+        };
+      }
+    })
+  );
 
   return results;
 });
 
-ipcMain.handle('process-spot-white', async (_event, files: string[], outputDir: string, geminiApiKey: string) => {
+ipcMain.handle('process-spot-white', async (_event, files: string[], outputDir: string, geminiApiKey: string, clientName?: string, mode?: 'standard' | 'economy') => {
   // Validação obrigatória da API key
   if (!geminiApiKey || geminiApiKey.trim() === '') {
     return files.map(file => ({
@@ -342,7 +420,7 @@ ipcMain.handle('process-spot-white', async (_event, files: string[], outputDir: 
       }
 
       // Processar no Photoshop (a verificação da ação já foi feita, mas será verificada novamente dentro do processSpotWhite)
-      const result = await automation.processSpotWhite(file, outputDir);
+      const result = await automation.processSpotWhite(file, outputDir, geminiApiKey, clientName, mode);
       console.log(`[Success] Arquivo processado com sucesso: ${result}`);
       results.push({
         file,
@@ -517,7 +595,8 @@ ipcMain.handle('check-upscale-availability', async () => {
 });
 
 // Kie.ai IA Criativa Handlers
-ipcMain.handle('kie-ai-process', async (_event, options: { prompt: string, imageBase64?: string, maskBase64?: string, model?: string, apiKey: string }) => {
+ipcMain.handle('kie-ai-process', async (_event, options: { prompt: string, imageBase64?: string, additionalImages?: string[], maskBase64?: string, model?: string, apiKey: string }) => {
+
   try {
     const { apiKey, ...generateOptions } = options;
     const kieHandler = new KieAiHandler(apiKey);
@@ -534,6 +613,62 @@ ipcMain.handle('kie-ai-status', async (_event, taskId: string, apiKey: string) =
     return await kieHandler.getTaskStatus(taskId);
   } catch (error) {
     logger.error('Erro no handler kie-ai-status:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
+  }
+});
+
+// ==================== HALFTONE & EFEITOS HANDLERS ====================
+
+// Handler para detectar documento ativo no Photoshop (VIA VBSCRIPT)
+ipcMain.handle('get-active-document', async () => {
+  console.log('[IPC] Recebido: get-active-document');
+  try {
+    const result = await photoshopAutomation.getActiveDocument();
+    if (result) {
+      console.log(`[IPC] Documento detectado: ${result.name}`);
+      return { success: true, name: result.name, path: result.path };
+    }
+    console.warn('[IPC] Nenhum documento detectado no Photoshop');
+    return { success: false, error: 'Nenhum documento aberto no Photoshop' };
+  } catch (error) {
+    console.error('[IPC] Erro em get-active-document:', error);
+    logger.error('Erro ao detectar documento ativo:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
+  }
+});
+
+// Handler para processar Halftone (suporta GENERIC_DARK, GENERIC_LIGHT, RT, HB, NORMAL)
+ipcMain.handle('process-halftone', async (_event, options: { lpi: number, type: 'RT' | 'HB' | 'NORMAL' | 'GENERIC_DARK' | 'GENERIC_LIGHT' }) => {
+  console.log(`[IPC] Recebido: process-halftone - LPI: ${options.lpi}, Tipo: ${options.type}`);
+  try {
+    await photoshopAutomation.processHalftone(options.lpi, options.type);
+    console.log('[IPC] Halftone finalizado com sucesso');
+    return { success: true };
+  } catch (error) {
+    console.error('[IPC] Erro no processamento de Halftone:', error);
+    logger.error('Erro no processamento de Halftone:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
+  }
+});
+
+// Handler para remover cor (preto ou branco)
+ipcMain.handle('remove-color', async (_event, color: 'black' | 'white') => {
+  try {
+    await photoshopAutomation.removeColor(color);
+    return { success: true };
+  } catch (error) {
+    logger.error('Erro ao remover cor:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
+  }
+});
+
+// Handler para Spot White Extraído
+ipcMain.handle('process-spotwhite-extracted', async () => {
+  try {
+    await photoshopAutomation.processSpotWhiteExtracted();
+    return { success: true };
+  } catch (error) {
+    logger.error('Erro no Spot White Extraído:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
   }
 });

@@ -67,29 +67,25 @@ def remove_background_advanced(input_path, output_path, remove_internal_blacks=F
         if input_image.mode != 'RGB':
             input_image = input_image.convert('RGB')
         
-        # OTIMIZAÇÃO: Redimensionar se muito grande (rembg é mais rápido com imagens menores)
-        MAX_DIMENSION = 1024
+        # OTIMIZAÇÃO: Redimensionar para modo ultra-rápido
+        MAX_DIMENSION = 720 # Reduzido de 1024 para ganho de performance
         if max(original_size) > MAX_DIMENSION:
-            print(f"PROGRESS:Redimensionando imagem grande ({original_size[0]}x{original_size[1]}) para processamento rápido...", file=sys.stderr, flush=True)
+            print(f"PROGRESS:Otimizando para velocidade...", file=sys.stderr, flush=True)
             ratio = MAX_DIMENSION / max(original_size)
             new_size = (int(original_size[0] * ratio), int(original_size[1] * ratio))
             input_image = input_image.resize(new_size, Image.Resampling.LANCZOS)
-            print(f"PROGRESS:Nova resolução: {new_size[0]}x{new_size[1]}", file=sys.stderr, flush=True)
         
-        # Remover fundo principal
-        print(f"PROGRESS:Inicializando modelo AI (u2net - Padrão Balanceado)...", file=sys.stderr, flush=True)
-        
-        # MEIO TERMO: Usar u2net (Qualidade boa) mas sem matting pesado
-        model_name = "u2net" 
+        # Modo Rápido usa u2netp (Pequeno e Veloz)
+        model_name = "u2netp" 
         try:
             session = new_session(model_name)
         except Exception as e:
-            print(f"WARNING:Erro ao carregar modelo {model_name}: {e}", file=sys.stderr, flush=True)
-            session = new_session("u2netp") # Fallback apenas se falhar
+            print(f"WARNING:Erro ao carregar modelo {model_name}: {e}. Usando fallback...", file=sys.stderr, flush=True)
+            session = new_session("u2netp")
 
-        print(f"PROGRESS:Removendo fundo (Qualidade Standard / Rápido)...", file=sys.stderr, flush=True)
+        print(f"PROGRESS:Removendo fundo (Modo Ultra-Rápido)...", file=sys.stderr, flush=True)
         
-        # Remover fundo SEM alpha matting (Meio termo: Modelo bom, processamento rápido)
+        # Remover fundo
         output_image = remove(
             input_image, 
             session=session,

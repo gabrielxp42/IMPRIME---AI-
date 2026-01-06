@@ -4,7 +4,7 @@
  * Acessibilidade: ARIA labels, focus states, keyboard navigation
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import {
     MousePointer2,
     Wand2,
@@ -17,7 +17,14 @@ import {
     Trash2,
     Download,
     Keyboard,
-    HelpCircle
+    HelpCircle,
+    AlignCenter,
+    AlignStartVertical,
+    AlignEndVertical,
+    AlignStartHorizontal,
+    AlignEndHorizontal,
+    LayoutList,
+    GripVertical
 } from 'lucide-react';
 import './Toolbar.css';
 
@@ -35,6 +42,11 @@ interface ToolbarProps {
     onRedo?: () => void;
     canUndo?: boolean;
     canRedo?: boolean;
+    onNew?: () => void;
+    canAlign?: boolean;
+    onAlign?: (type: 'left' | 'right' | 'top' | 'bottom' | 'center-h' | 'center-v') => void;
+    canDistribute?: boolean;
+    onDistribute?: (axis: 'horizontal' | 'vertical') => void;
 }
 
 // Componente de Tooltip Premium
@@ -101,6 +113,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
     onRedo,
     canUndo = false,
     canRedo = false,
+    onNew,
+    canAlign,
+    onAlign,
+    canDistribute,
+    onDistribute
 }) => {
     const [showShortcuts, setShowShortcuts] = useState(false);
 
@@ -167,7 +184,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
                 <Tooltip content="Novo documento" shortcut="Ctrl+N">
                     <button
                         className="toolbar-btn big-icon-btn"
-                        onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', ctrlKey: true }))}
+                        onClick={onNew}
                         aria-label="Novo documento"
                     >
                         <div className="btn-content">
@@ -255,6 +272,47 @@ const Toolbar: React.FC<ToolbarProps> = ({
                     </Tooltip>
                 </div>
             </div>
+
+            {/* Seção ALINHAMENTO (Aparece com múltipla seleção) */}
+            {canAlign && (
+                <>
+                    <div className="divider-vertical large" role="separator" aria-hidden="true" />
+                    <div className="toolbar-group alignment-group" role="group" aria-label="Alinhamento">
+                        <div className="action-row">
+                            <Tooltip content="Alinhar à Esquerda">
+                                <button className="toolbar-btn icon-small" onClick={() => onAlign?.('left')}><AlignStartVertical size={18} /></button>
+                            </Tooltip>
+                            <Tooltip content="Centro Horizontal">
+                                <button className="toolbar-btn icon-small" onClick={() => onAlign?.('center-h')}><AlignCenter size={18} /></button>
+                            </Tooltip>
+                            <Tooltip content="Alinhar à Direita">
+                                <button className="toolbar-btn icon-small" onClick={() => onAlign?.('right')}><AlignEndVertical size={18} /></button>
+                            </Tooltip>
+                        </div>
+                        <div className="action-row">
+                            <Tooltip content="Alinhar ao Topo">
+                                <button className="toolbar-btn icon-small" onClick={() => onAlign?.('top')}><AlignStartHorizontal size={18} /></button>
+                            </Tooltip>
+                            <Tooltip content="Centro Vertical">
+                                <button className="toolbar-btn icon-small" onClick={() => onAlign?.('center-v')}><LayoutList size={18} style={{ transform: 'rotate(90deg)' }} /></button>
+                            </Tooltip>
+                            <Tooltip content="Alinhar à Base">
+                                <button className="toolbar-btn icon-small" onClick={() => onAlign?.('bottom')}><AlignEndHorizontal size={18} /></button>
+                            </Tooltip>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {canDistribute && (
+                <div className="toolbar-group distribute-group" role="group" aria-label="Distribuição">
+                    <Tooltip content="Distribuir Espaçamento Igual">
+                        <button className="toolbar-btn icon-medium" onClick={() => onDistribute?.('horizontal')}>
+                            <GripVertical size={20} />
+                        </button>
+                    </Tooltip>
+                </div>
+            )}
 
             <div className="divider-vertical large" role="separator" aria-hidden="true" />
 

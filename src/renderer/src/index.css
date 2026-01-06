@@ -6,10 +6,10 @@
   --bg-card: rgba(26, 26, 46, 0.6);
   --bg-hover: rgba(255, 255, 255, 0.05);
 
-  /* Accent Colors */
-  --accent-primary: #667eea;
-  --accent-secondary: #764ba2;
-  --accent-success: #10b981;
+  /* Accent Colors - Brand Identity (Vibrant Purple & Pink) */
+  --accent-primary: #a855f7;
+  --accent-secondary: #ec4899;
+  --accent-success: #22c55e;
   --accent-error: #ef4444;
   --accent-warning: #f59e0b;
 
@@ -100,4 +100,45 @@ code {
 
 button:focus-visible {
   outline-offset: 4px;
+}
+
+/* Global Form Resets - No more white boxes */
+input,
+select,
+textarea {
+  background: rgba(15, 23, 42, 0.6);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent-primary);
+  background: rgba(15, 23, 42, 0.8);
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.2);
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

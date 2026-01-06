@@ -17,6 +17,7 @@
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -24,11 +25,8 @@
 
 .file-preview-modal-container {
   background: #1a1a2e;
-  border-radius: 16px;
-  border: 1px solid rgba(102, 126, 234, 0.3);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  max-width: 90vw;
-  max-height: 90vh;
+  width: 100vw;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   animation: slideUp 0.3s ease-out;
@@ -40,6 +38,7 @@
     opacity: 0;
     transform: translateY(30px) scale(0.95);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -49,10 +48,12 @@
 .file-preview-modal-header {
   display: flex !important;
   justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
+  visibility: visible !important;
+  opacity: 1 !important;
+  padding: 30px 24px 15px 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(10px);
   gap: 16px;
   overflow: visible !important;
   min-height: 80px;
@@ -125,10 +126,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-  overflow: hidden; /* Mudado de auto para hidden - controlar scroll manualmente */
-  min-height: 400px;
-  max-height: calc(90vh - 140px);
+  padding: 0;
+  overflow: hidden;
+  /* Mudado de auto para hidden - controlar scroll manualmente */
+  min-height: 100%;
+  max-height: none;
   position: relative;
   transition: background-color 0.3s ease;
   /* Otimizações de performance - força aceleração GPU */
@@ -159,11 +161,11 @@
 }
 
 .file-preview-image {
-  /* Exibir em tamanho natural (100%) - não limitar */
-  max-width: none !important;
-  max-height: none !important;
-  width: auto !important;
-  height: auto !important;
+  /* Ajustar para caber na tela inicialmente, permitindo zoom depois via JS se implementado */
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
   object-fit: contain;
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
@@ -177,10 +179,9 @@
   /* Otimizar renderização */
   image-rendering: -webkit-optimize-contrast;
   image-rendering: crisp-edges;
+  image-rendering: pixelated;
   /* Forçar layer de composição */
-  will-change: transform;
-  /* Otimizar durante drag */
-  transition: none;
+  background-color: transparent;
   /* Garantir que não seja redimensionada pelo container */
   display: block;
 }
@@ -188,16 +189,13 @@
 /* Durante drag, reduzir qualidade de renderização para melhor performance */
 .file-preview-image.dragging {
   /* Renderização mais rápida durante movimento */
-  image-rendering: -webkit-optimize-contrast;
-  image-rendering: crisp-edges;
+  image-rendering: pixelated;
   /* Reduzir sombra durante drag para melhor performance */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   /* Reduzir filtros pesados */
   filter: none;
   /* Desabilitar animações durante drag */
   animation: none;
-  /* Forçar composição GPU */
-  transform: translate3d(0, 0, 0);
 }
 
 @keyframes imageFadeIn {
@@ -205,6 +203,7 @@
     opacity: 0;
     transform: scale(0.95);
   }
+
   to {
     opacity: 1;
     transform: scale(1);

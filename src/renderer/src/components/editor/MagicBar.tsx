@@ -18,14 +18,14 @@ interface MagicBarProps {
     onPaintClick?: () => void;
     onInputChange?: (val: string) => void;
     initialInput?: string;
+    onHistoryChange?: (history: { role: 'user' | 'model'; text: string }[]) => void;
 }
 
 const MODELS = [
-    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', desc: 'Máxima qualidade', type: 'pro' },
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: 'Equilibrado', type: 'flash' },
-    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Lite', desc: 'Econômico', type: 'lite' },
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', desc: 'Clássico', type: 'flash' },
-    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', desc: 'Backup', type: 'lite' },
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', desc: 'Raciocínio complexo (1M tokens)', type: 'pro' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: 'Rápido e Eficiente', type: 'flash' },
+    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Lite', desc: 'Alta frequência', type: 'lite' },
+    { id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Image', desc: 'Edição de Imagem', type: 'image' },
 ];
 
 // Sugestões contextuais baseadas no estado do canvas
@@ -58,7 +58,8 @@ const MagicBar: React.FC<MagicBarProps> = ({
     hasSelection = false,
     onPaintClick,
     onInputChange,
-    initialInput = ''
+    initialInput = '',
+    onHistoryChange
 }) => {
     const [input, setInput] = useState(initialInput);
     const [showHistory, setShowHistory] = useState(false);
@@ -135,7 +136,11 @@ const MagicBar: React.FC<MagicBarProps> = ({
         setInput('');
         if (onInputChange) onInputChange('');
         setShowHistory(false);
-    }, [input, isProcessing, onCommand]);
+    }, [input, isProcessing, onCommand, onInputChange]);
+
+    const handleClearHistory = useCallback(() => {
+        if (onHistoryChange) onHistoryChange([]);
+    }, [onHistoryChange]);
 
     const handleSuggestion = useCallback((s: string) => {
         onCommand(s);
@@ -204,6 +209,11 @@ const MagicBar: React.FC<MagicBarProps> = ({
                             <span className="empty-icon">💬</span>
                             <p>Comece uma conversa com sua Designer IA</p>
                         </div>
+                    )}
+                    {history.length > 0 && (
+                        <button className="clear-history-btn" onClick={handleClearHistory}>
+                            Limpar Histórico
+                        </button>
                     )}
                     {history.map((msg, idx) => (
                         <div

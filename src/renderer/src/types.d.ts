@@ -25,9 +25,12 @@ declare global {
             removeBackgroundManual: (inputPath: string, outputPath: string, selection: any) => Promise<{ success: boolean; outputPath?: string; error?: string }>;
             removeBackgroundBase64: (base64Data: string, highPrecision?: boolean) => Promise<{ success: boolean; resultBase64?: string; error?: string }>;
             openInPhotoshop: (filePath: string, widthCm?: number, dpi?: number, addMargin?: boolean) => Promise<{ success: boolean; error?: string }>;
+            getThumbnail: (filePath: string) => Promise<{ success: boolean; dataUrl?: string; error?: string }>;
+            getPreviewImage: (filePath: string) => Promise<{ success: boolean; dataUrl?: string; error?: string }>;
             readFileAsDataUrl: (filePath: string) => Promise<{ success: boolean; dataUrl?: string; error?: string }>;
             getSystemFonts: () => Promise<string[]>;
-            kieAiProcess: (options: { prompt: string, imageBase64?: string, maskBase64?: string, model?: string, apiKey: string, aspectRatio?: string }) => Promise<{ success: boolean; imageBase64?: string; imageUrl?: string; error?: string }>;
+            kieAiProcess: (options: { prompt: string, imageBase64?: string, additionalImages?: string[], maskBase64?: string, model?: string, apiKey: string, aspectRatio?: string }) => Promise<{ success: boolean; imageBase64?: string; imageUrl?: string; error?: string }>;
+
             kieAiStatus: (taskId: string, apiKey: string) => Promise<any>;
             exportLogs: () => Promise<{ success: boolean; path?: string; error?: string }>;
             openLogsDir: () => Promise<{ success: boolean; error?: string }>;

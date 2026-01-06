@@ -10,7 +10,32 @@ export class BackgroundRemovalHighPrecisionHandler {
             return path.join(process.resourcesPath, 'background_remover_highprecision.exe');
         }
 
-        // Em desenvolvimento, usar o python do sistema
+        // Em desenvolvimento, tenta encontrar o comando python correto no Windows
+        if (process.platform === 'win32') {
+            const { execSync } = require('child_process');
+            const { join } = require('path');
+            const home = process.env.USERPROFILE || '';
+
+            const commands = [
+                'py', // Prioridade máxima no Windows
+                // Caminhos comuns de instalação manual
+                join(home, 'AppData', 'Local', 'Programs', 'Python', 'Python311', 'python.exe'),
+                join(home, 'AppData', 'Local', 'Programs', 'Python', 'Python312', 'python.exe'),
+                join(home, 'AppData', 'Local', 'Programs', 'Python', 'Python310', 'python.exe'),
+                'python',
+                'python3',
+            ];
+
+            for (const cmd of commands) {
+                try {
+                    execSync(`"${cmd}" --version`, { stdio: 'ignore' });
+                    return cmd;
+                } catch (e) {
+                    continue;
+                }
+            }
+        }
+
         return 'python';
     }
 

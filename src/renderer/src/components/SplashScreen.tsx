@@ -49,7 +49,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
                 <h1 className="app-title-large">
                     IMPRIME <span className="highlight">AI</span>
                 </h1>
-                <p className="app-subtitle">Automated Design Intelligence</p>
+                <p className="app-subtitle">Inteligência de Design Automatizada</p>
 
                 <div className="loading-container">
                     <div className="progress-bar-bg">

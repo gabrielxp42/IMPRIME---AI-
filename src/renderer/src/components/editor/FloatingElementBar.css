@@ -23,6 +23,13 @@
     height: 48px;
 }
 
+/* Estado Flipado: Quando não há espaço em cima, a barra desce */
+.floating-smart-bar.is-flipped {
+    transform: translate(-50%, 0);
+    margin-top: 50px;
+    /* Desce para baixo do elemento */
+}
+
 /* Divisor com efeito de vidro */
 .bar-divider {
     width: 1px;
@@ -397,4 +404,138 @@
     background: linear-gradient(135deg, #a855f7, #d946ef);
     color: white;
     box-shadow: 0 8px 20px rgba(168, 85, 247, 0.4);
+}
+
+/* Warning Mode (Low DPI) */
+.floating-smart-bar.warning-mode {
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    box-shadow: 0 15px 35px -10px rgba(239, 68, 68, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    animation: pulseBorder 2s infinite;
+}
+
+@keyframes pulseBorder {
+    0% {
+        border-color: rgba(239, 68, 68, 0.4);
+    }
+
+    50% {
+        border-color: rgba(239, 68, 68, 0.8);
+    }
+
+    100% {
+        border-color: rgba(239, 68, 68, 0.4);
+    }
+}
+
+@keyframes slideUpFade {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+.smart-alerts-container {
+    position: absolute;
+    bottom: calc(100% + 12px);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 8px;
+    align-items: center;
+    pointer-events: none;
+    width: max-content;
+}
+
+/* Quando a barra está embaixo do elemento, os alertas devem aparecer embaixo da barra */
+.floating-smart-bar.is-flipped .smart-alerts-container {
+    bottom: auto;
+    top: calc(100% + 12px);
+    flex-direction: column;
+}
+
+.smart-alert {
+    background: rgba(239, 68, 68, 0.9);
+    padding: 8px 14px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    white-space: nowrap;
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+    animation: slideUpFade 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    pointer-events: auto;
+}
+
+.smart-alert.warning {
+    background: rgba(245, 158, 11, 0.95);
+    /* Amber 500 */
+}
+
+.smart-alert.danger {
+    background: rgba(225, 29, 72, 0.95);
+    /* Rose 600 */
+}
+
+.alert-icon {
+    font-size: 16px;
+}
+
+.alert-text {
+    font-size: 13px;
+    font-weight: 700;
+    color: white;
+    letter-spacing: -0.2px;
+}
+
+.alert-actions {
+    display: flex;
+    gap: 6px;
+    border-left: 1px solid rgba(255, 255, 255, 0.2);
+    padding-left: 10px;
+    margin-left: 4px;
+}
+
+.alert-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+}
+
+.alert-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+}
+
+.alert-btn.primary {
+    background: white;
+    color: #e11d48;
+    /* Matches danger color */
+    border-color: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.alert-btn.primary:hover {
+    background: #f8fafc;
+    color: #be123c;
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+}
+
+.smart-alert.warning .alert-btn.primary {
+    color: #d97706;
+    /* Matches warning text */
 }

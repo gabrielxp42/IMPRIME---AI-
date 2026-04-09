@@ -175,7 +175,13 @@ End If
         jsxContent = jsxContent.replace(/jamEngine\.jsonPlay\(\s*"'Stop'"[\s\S]*?DialogModes\.NO\s*\);/g, '// Dialg "Stop" removed by automation');
 
         // SILENCIAR DIÁLOGOS DE CONFIRMAÇÃO (ex: "Achatar camadas?")
-        jsxContent = jsxContent.replace(/DialogModes\.ALL/g, 'DialogModes.NO');
+        // Não silenciar se for script de halftone, pois o usuário precisa escolher o tamanho/formato dos pontos
+        if (category === 'halftone') {
+            // FORÇAR DIÁLOGOS NO HALFTONE (Sobrescrevendo configuração interna do script se houver)
+            jsxContent = jsxContent.replace(/jamEngine\.displayDialogs\s*=\s*DialogModes\.ERROR;/g, 'jamEngine.displayDialogs = DialogModes.ALL;');
+        } else {
+            jsxContent = jsxContent.replace(/DialogModes\.ALL/g, 'DialogModes.NO');
+        }
 
         await this.executeJSXScript(jsxContent, '', '');
     }
@@ -333,12 +339,119 @@ End If
         return null;
     }
 
-    async checkActionExists(actionName: string = 'SPOTWHITE-PHOTOSHOP', actionSet?: string): Promise<boolean> { return true; }
+    async checkActionExists(actionName: string = 'SPOTWHITE-PHOTOSHOP', actionSet?: string): Promise<boolean> {
+        console.log(`[Photoshop] Verificando se ação existe: ${actionName}`);
+
+        if (!this.scriptPath || !fs.existsSync(this.scriptPath)) {
+            console.error("[Photoshop] Script Python não encontrado para checkActionExists");
+            return false;
+        }
+
+        try {
+            const setArg = actionSet ? ` "${actionSet}"` : "";
+            const command = `"${this.pythonCommand}" "${this.scriptPath}" check_action "${actionName}"${setArg}`;
+
+            const { stdout } = await execAsync(command);
+            return stdout.includes('EXISTS:');
+        } catch (error) {
+            console.warn(`[Photoshop] Falha ao verificar ação via Python:`, error);
+            // Fallback para true apenas se o erro não for crítico (para não travar a UI)
+            // Mas permitimos que o erro de processamento ocorra depois se necessário
+            return false;
+        }
+    }
     async openInPhotoshop(filePath: string, widthCm: number, dpi: number = 300, addMargin: boolean = false): Promise<void> {
         await this.executeJSXScript(`open(new File("${filePath.replace(/\\/g, '/')}"));`, filePath, '');
     }
-    async processSpotWhite(inputFile: string, outputDir: string, geminiApiKey?: string, clientName?: string, mode: 'standard' | 'economy' = 'standard'): Promise<string> {
-        // Fallback or implementation of original logic if needed, but we focus on extracted scripts now
-        return inputFile;
+    async processSpotWhite(inputFile: string, outputDir: string, geminiApiKey?: string, clientName?: string, mode: 'standard' | 'economy' = 'standard', heightCmInput?: number, page: number = 1): Promise<string> {
+        console.log(`[Photoshop] processSpotWhite: File=${inputFile}, Mode=${mode}, Client=${clientName}, HeightCm=${heightCmInput}, Page=${page}`);
+
+        if (!this.scriptPath || !fs.existsSync(this.scriptPath)) {
+            throw new Error(`Script Python não encontrado em: ${this.scriptPath}. Verifique a instalação.`);
+        }
+
+        // 1. Determinar o Conjunto de Ações baseado no modo
+        const actionSet = mode === 'economy' ? "Mask Processing Economy" : "DTF";
+        const actionName = "SPOTWHITE-PHOTOSHOP";
+
+        // 2. Preparar Nome de Saída (Regra: (MEDIDA) - (CLIENTE) - (ARQUIVO).tif)
+        let measure = "ST";
+
+        // Prioridade 1: Medida passada via parâmetro (mais confiável/pré-validada)
+        if (heightCmInput && heightCmInput > 0) {
+            if (heightCmInput >= 100) {
+                measure = `${Math.ceil(heightCmInput / 100)}M`;
+            } else {
+                measure = `${Math.round(heightCmInput)}CM`;
+            }
+        }
+        // Prioridade 2: Tentar via Sharp se não fornecido
+        else {
+            try {
+                const sharp = require('sharp');
+                const metadata = await sharp(inputFile).metadata();
+                if (metadata.width && metadata.height) {
+                    const dpi = metadata.density || 300;
+                    const heightCm = (metadata.height / dpi) * 2.54;
+
+                    if (heightCm >= 100) {
+                        measure = `${Math.ceil(heightCm / 100)}M`;
+                    } else {
+                        measure = `${Math.round(heightCm)}CM`;
+                    }
+                }
+            } catch (e) {
+                console.warn("[Photoshop] Não foi possível calcular a medida da imagem via Sharp:", e);
+            }
+        }
+
+        const safeClientName = (clientName || "S_NOME").replace(/[^a-z0-9]/gi, '_');
+        const originalName = path.basename(inputFile, path.extname(inputFile));
+        
+        // Adicionar sufixo de página se for maior que 1 ou se for um PDF (para manter consistência)
+        const isPDF = inputFile.toLowerCase().endsWith('.pdf');
+        const pageSuffix = (isPDF && page >= 1) ? `_Pg${page}` : '';
+        
+        const outputFileName = `(${measure}) - ${safeClientName} - ${originalName}${pageSuffix}.tif`;
+        const outputPath = path.join(outputDir, outputFileName);
+
+        // 3. Executar script Python (process)
+        // O comando 'process' no Python abre o arquivo, roda a ação e salva como TIFF
+        // Novo: adicionamos o número da página como último argumento
+        const command = `"${this.pythonCommand}" "${this.scriptPath}" process "${inputFile}" "${outputPath}" "${actionName}" "${actionSet}" ${page}`;
+
+        console.log(`[Photoshop] Executando Automação: ${command}`);
+        logger.info(`[Photoshop] Iniciando produção de Spot White: ${outputFileName}`);
+
+        try {
+            const { stdout, stderr } = await execAsync(command, { timeout: 600000 });
+
+            if (stdout.includes('SUCCESS:')) {
+                const resultPath = stdout.split('SUCCESS:')[1].trim();
+                console.log(`[Photoshop] Produção Concluída: ${resultPath}`);
+                return resultPath || outputPath;
+            }
+
+            // Se não tem SUCCESS, mas tem ERROR: no stderr ou stdout, lançar erro
+            const combinedOutput = (stdout + "\n" + stderr).trim();
+            if (combinedOutput.includes('ERROR:')) {
+                const errorMatch = combinedOutput.match(/ERROR:(.*)/);
+                const errorMessage = errorMatch ? errorMatch[1].trim() : combinedOutput;
+                throw new Error(errorMessage);
+            }
+
+            // Se ainda assim não retornou, mas o processo terminou, verificar se o arquivo de destino existe
+            // como fallback de segurança
+            if (fs.existsSync(outputPath)) {
+                console.warn(`[Photoshop] Script finalizou sem SUCCESS:, mas arquivo de saída existe: ${outputPath}`);
+                return outputPath;
+            }
+
+            throw new Error(combinedOutput || "O script de automação finalizou sem retornar o status de sucesso.");
+        } catch (error: any) {
+            console.error(`[Photoshop] Falha crítica no processSpotWhite:`, error);
+            logger.error(`[Photoshop] Erro ao processar ${originalName}: ${error.message}`);
+            throw error;
+        }
     }
 }

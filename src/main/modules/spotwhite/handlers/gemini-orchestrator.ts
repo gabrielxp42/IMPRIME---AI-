@@ -6,7 +6,9 @@ export class GeminiOrchestrator {
 
   constructor(apiKey: string) {
     this.genAI = new GoogleGenerativeAI(apiKey);
-    this.model = this.genAI.getGenerativeModel({ model: 'gemini-pro' });
+    this.model = this.genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash'
+    });
   }
 
   async orchestrateProcess(filePath: string): Promise<void> {

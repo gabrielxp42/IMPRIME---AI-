@@ -1,11 +1,12 @@
 /**
  * Ferramenta de Remoção de Fundo Inteligente
  * Usa rembg via IPC do Electron (sem servidor separado)
- * Traduzido para Português BR
+ * Com detecção e correção de semitransparência integrada
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { ReactCompareSlider, ReactCompareSliderImage } from 'react-compare-slider';
+import { analyzeTransparency, fixTransparency } from '../../utils/transparencyAnalysis';
 import './BackgroundRemovalTool.css';
 
 interface BackgroundRemovalToolProps {
@@ -35,6 +36,16 @@ const BackgroundRemovalTool: React.FC<BackgroundRemovalToolProps> = ({
     const imageRef = useRef<HTMLImageElement | null>(null);
     const [imageLoaded, setImageLoaded] = useState(false);
 
+    // Transparency States (Integrado)
+    const [hasTransparencyIssues, setHasTransparencyIssues] = useState(false);
+    const [transparencyPercentage, setTransparencyPercentage] = useState(0);
+    const [removeThreshold, setRemoveThreshold] = useState(30);
+    const [solidifyThreshold, setSolidifyThreshold] = useState(220);
+    const [correctedImage, setCorrectedImage] = useState<string | null>(null);
+    const [isApplyingFix, setIsApplyingFix] = useState(false);
+    const [diagnosticPreview, setDiagnosticPreview] = useState<string | null>(null);
+    const [showDiagnostic, setShowDiagnostic] = useState(false);
+
     // Carregar imagem ao montar
     useEffect(() => {
         const img = new Image();
@@ -59,7 +70,6 @@ const BackgroundRemovalTool: React.FC<BackgroundRemovalToolProps> = ({
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // Ajustar tamanho do canvas
         const maxSize = 600;
         let width = img.width;
         let height = img.height;
@@ -73,14 +83,10 @@ const BackgroundRemovalTool: React.FC<BackgroundRemovalToolProps> = ({
         canvas.width = width;
         canvas.height = height;
 
-        // Desenhar padrão de transparência
         drawCheckerboard(ctx, width, height);
-
-        // Desenhar imagem
         ctx.drawImage(img, 0, 0, width, height);
     }, []);
 
-    // Desenhar padrão xadrez (transparência)
     const drawCheckerboard = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
         const size = 10;
         for (let x = 0; x < width; x += size) {
@@ -91,40 +97,71 @@ const BackgroundRemovalTool: React.FC<BackgroundRemovalToolProps> = ({
         }
     };
 
-    // Redesenhar quando imagem carregar ou mudar modo de visualização
     useEffect(() => {
         if (imageLoaded) {
             drawOriginalCanvas();
         }
     }, [imageLoaded, drawOriginalCanvas, showComparison, resultImage]);
 
+    // Aplicar correção de transparência em tempo real
+    useEffect(() => {
+        if (!hasTransparencyIssues || !resultImage) return;
+
+        const applyFix = async () => {
+            setIsApplyingFix(true);
+            try {
+                const fixed = await fixTransparency(resultImage, {
+                    removeThreshold,
+                    solidifyThreshold
+                });
+                setCorrectedImage(fixed);
+            } catch (e) {
+                console.error('Erro ao aplicar correção:', e);
+            } finally {
+                setIsApplyingFix(false);
+            }
+        };
+
+        const debounce = setTimeout(applyFix, 300);
+        return () => clearTimeout(debounce);
+    }, [removeThreshold, solidifyThreshold, hasTransparencyIssues, resultImage]);
+
     // Processar remoção de fundo
     const handleRemoveBackground = useCallback(async () => {
         setProcessing(true);
         setError(null);
         setResultImage(null);
+        setHasTransparencyIssues(false);
+        setCorrectedImage(null);
 
         try {
-            // Verificar se estamos no Electron
             if (!window.electronAPI?.removeBackgroundBase64) {
                 throw new Error('Função de remoção de fundo não disponível neste ambiente');
             }
 
-            // Extrair base64 puro
             const base64Data = imageSrc.includes('base64,')
                 ? imageSrc.split('base64,')[1]
                 : imageSrc;
 
-            // Chamar o handler do Electron
             const result = await window.electronAPI.removeBackgroundBase64(
                 base64Data,
-                mode === 'precision' // highPrecision
+                mode === 'precision'
             );
 
             if (result.success && result.resultBase64) {
                 const processedSrc = `data:image/png;base64,${result.resultBase64}`;
                 setResultImage(processedSrc);
                 setShowComparison(true);
+
+                // Analisar transparência
+                const analysis = await analyzeTransparency(processedSrc);
+                if (analysis.hasIssues) {
+                    console.log('[BG Tool] Transparência problemática detectada:', analysis.issuePercentage.toFixed(2) + '%');
+                    setHasTransparencyIssues(true);
+                    setTransparencyPercentage(analysis.issuePercentage);
+                    setDiagnosticPreview(analysis.previewUrl); // Imagem com marcação neon
+                    setShowDiagnostic(true); // Mostrar diagnóstico por padrão
+                }
             } else {
                 throw new Error(result.error || 'Erro ao processar imagem');
             }
@@ -137,24 +174,21 @@ const BackgroundRemovalTool: React.FC<BackgroundRemovalToolProps> = ({
         }
     }, [imageSrc, mode]);
 
-    // HANDLER DO MODO TESTER (Alta Qualidade)
+    // HANDLER DO MODO TESTER
     const handleTesterRemove = useCallback(async () => {
         setProcessing(true);
         setError(null);
         setResultImage(null);
+        setHasTransparencyIssues(false);
+        setCorrectedImage(null);
 
         try {
-            console.log("Iniciando remoção via TESTER (InSPyReNet)...");
-
-            // Chamar servidor Python local na porta 8002
             const response = await fetch('http://localhost:8002/remove', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     image_base64: imageSrc,
-                    threshold: 0.2 // Tenta preservar detalhes tênues (texto)
+                    threshold: 0.2
                 })
             });
 
@@ -167,35 +201,51 @@ const BackgroundRemovalTool: React.FC<BackgroundRemovalToolProps> = ({
             if (result.success && result.result_image) {
                 setResultImage(result.result_image);
                 setShowComparison(true);
+
+                // Analisar transparência
+                const analysis = await analyzeTransparency(result.result_image);
+                if (analysis.hasIssues) {
+                    setHasTransparencyIssues(true);
+                    setTransparencyPercentage(analysis.issuePercentage);
+                    setDiagnosticPreview(analysis.previewUrl);
+                    setShowDiagnostic(true);
+                }
             } else {
                 throw new Error(result.error || 'Erro desconhecido no Tester');
             }
-
         } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : 'Erro ao conectar no servidor de teste (Verifique se run_tester.bat está rodando)';
+            const errorMessage = err instanceof Error ? err.message : 'Erro ao conectar no servidor de teste';
             setError(errorMessage);
-            console.error('Erro Tester:', err);
         } finally {
             setProcessing(false);
         }
     }, [imageSrc]);
 
-    // Aplicar resultado
+    // Aplicar resultado (usando imagem corrigida se disponível)
     const handleApply = useCallback(() => {
-        if (resultImage) {
-            onApply(resultImage);
+        const imageToApply = (hasTransparencyIssues && correctedImage) ? correctedImage : resultImage;
+        if (imageToApply) {
+            onApply(imageToApply);
         }
-    }, [resultImage, onApply]);
+    }, [resultImage, correctedImage, hasTransparencyIssues, onApply]);
 
-    // Limpar e reiniciar
     const handleReset = useCallback(() => {
         setResultImage(null);
         setShowComparison(false);
         setError(null);
+        setHasTransparencyIssues(false);
+        setCorrectedImage(null);
+        setDiagnosticPreview(null);
+        setShowDiagnostic(false);
     }, []);
 
-    // Controle de comparação removido em favor do ReactCompareSlider
-
+    // Imagem a mostrar no preview
+    // Se showDiagnostic e temos diagnosticPreview -> mostra diagnóstico (neon)
+    // Senão, se temos correção aplicada -> mostra corrigida
+    // Senão -> mostra resultado bruto
+    const displayImage = showDiagnostic && diagnosticPreview
+        ? diagnosticPreview
+        : (hasTransparencyIssues && correctedImage ? correctedImage : resultImage);
 
     return (
         <div className="background-removal-tool">
@@ -208,11 +258,10 @@ const BackgroundRemovalTool: React.FC<BackgroundRemovalToolProps> = ({
 
             <div className="bg-tool-content">
                 <div className="bg-tool-canvas-container">
-                    {/* Preview com comparação */}
-                    {showComparison && resultImage ? (
+                    {showComparison && displayImage ? (
                         <div style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                             <ReactCompareSlider
-                                itemOne={<ReactCompareSliderImage src={resultImage} alt="Sem Fundo" style={{ objectFit: 'contain' }} />}
+                                itemOne={<ReactCompareSliderImage src={displayImage} alt="Sem Fundo" style={{ objectFit: 'contain' }} />}
                                 itemTwo={<ReactCompareSliderImage src={imageSrc} alt="Original" style={{ objectFit: 'contain' }} />}
                                 style={{ width: '100%', height: '100%', maxHeight: '600px' }}
                             />
@@ -221,7 +270,6 @@ const BackgroundRemovalTool: React.FC<BackgroundRemovalToolProps> = ({
                         <canvas ref={canvasRef} className="bg-tool-canvas" />
                     )}
 
-                    {/* Loading */}
                     {processing && (
                         <div className="bg-tool-loading">
                             <div className="spinner"></div>
@@ -256,12 +304,12 @@ const BackgroundRemovalTool: React.FC<BackgroundRemovalToolProps> = ({
                         <p className="mode-hint">
                             {mode === 'auto'
                                 ? '⚡ Processamento rápido, ideal para a maioria das imagens'
-                                : '🎯 Alta precisão com alpha matting para detalhes finos (cabelos, pelos)'}
+                                : '🎯 Alta precisão com alpha matting para detalhes finos'}
                         </p>
                     </div>
 
-                    {/* MODO TESTER (BETA) */}
-                    <div className="bg-tool-tester-section" style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #eee' }}>
+                    {/* TESTER */}
+                    <div className="bg-tool-tester-section" style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                         <button
                             onClick={handleTesterRemove}
                             disabled={processing}
@@ -282,6 +330,99 @@ const BackgroundRemovalTool: React.FC<BackgroundRemovalToolProps> = ({
                         </p>
                     </div>
 
+                    {/* === SEÇÃO DE TRANSPARÊNCIA (INTEGRADA) === */}
+                    {hasTransparencyIssues && resultImage && (
+                        <div style={{
+                            marginTop: '15px',
+                            padding: '12px',
+                            background: 'linear-gradient(135deg, rgba(255,0,255,0.15), rgba(139,92,246,0.15))',
+                            borderRadius: '8px',
+                            border: '1px solid rgba(255,0,255,0.3)'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                                <span style={{ fontSize: '1.2em' }}>⚠️</span>
+                                <span style={{ fontWeight: 'bold', color: '#ff00ff' }}>
+                                    Semitransparência Detectada ({transparencyPercentage.toFixed(1)}%)
+                                </span>
+                            </div>
+                            <p style={{ fontSize: '0.85em', color: '#aaa', marginBottom: '12px' }}>
+                                Ajuste os controles abaixo para evitar falhas de impressão DTF/DTG:
+                            </p>
+
+                            {/* Toggle de visualização */}
+                            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                                <button
+                                    onClick={() => setShowDiagnostic(true)}
+                                    style={{
+                                        flex: 1,
+                                        padding: '8px',
+                                        border: showDiagnostic ? '2px solid #ff00ff' : '1px solid #555',
+                                        background: showDiagnostic ? 'rgba(255,0,255,0.2)' : 'transparent',
+                                        color: showDiagnostic ? '#ff00ff' : '#888',
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        fontWeight: showDiagnostic ? 'bold' : 'normal',
+                                        fontSize: '0.85em'
+                                    }}
+                                >
+                                    🔍 Ver Diagnóstico
+                                </button>
+                                <button
+                                    onClick={() => setShowDiagnostic(false)}
+                                    style={{
+                                        flex: 1,
+                                        padding: '8px',
+                                        border: !showDiagnostic ? '2px solid #22c55e' : '1px solid #555',
+                                        background: !showDiagnostic ? 'rgba(34,197,94,0.2)' : 'transparent',
+                                        color: !showDiagnostic ? '#22c55e' : '#888',
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        fontWeight: !showDiagnostic ? 'bold' : 'normal',
+                                        fontSize: '0.85em'
+                                    }}
+                                >
+                                    ✓ Ver Correção
+                                </button>
+                            </div>
+
+                            <div style={{ marginBottom: '10px' }}>
+                                <label style={{ fontSize: '0.85em', display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>Remover (Alpha &lt; {removeThreshold})</span>
+                                    <span style={{ color: '#888' }}>Limpa bordas fracas</span>
+                                </label>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={128}
+                                    value={removeThreshold}
+                                    onChange={(e) => setRemoveThreshold(parseInt(e.target.value))}
+                                    style={{ width: '100%', accentColor: '#ff00ff' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '0.85em', display: 'flex', justifyContent: 'space-between' }}>
+                                    <span>Solidificar (Alpha &gt; {solidifyThreshold})</span>
+                                    <span style={{ color: '#888' }}>Torna opaco</span>
+                                </label>
+                                <input
+                                    type="range"
+                                    min={128}
+                                    max={255}
+                                    value={solidifyThreshold}
+                                    onChange={(e) => setSolidifyThreshold(parseInt(e.target.value))}
+                                    style={{ width: '100%', accentColor: '#8b5cf6' }}
+                                />
+                            </div>
+
+                            {isApplyingFix && (
+                                <p style={{ fontSize: '0.8em', color: '#888', marginTop: '8px', textAlign: 'center' }}>
+                                    Aplicando correção...
+                                </p>
+                            )}
+                        </div>
+                    )}
+
                     {/* Dicas */}
                     <div className="bg-tool-tips">
                         <h4>💡 Dicas</h4>
@@ -292,7 +433,6 @@ const BackgroundRemovalTool: React.FC<BackgroundRemovalToolProps> = ({
                         </ul>
                     </div>
 
-                    {/* Erro */}
                     {error && (
                         <div className="bg-tool-error">
                             <strong>Erro:</strong> {error}
@@ -313,7 +453,7 @@ const BackgroundRemovalTool: React.FC<BackgroundRemovalToolProps> = ({
                             <>
                                 <button
                                     onClick={handleApply}
-                                    disabled={processing}
+                                    disabled={processing || isApplyingFix}
                                     className="btn btn-success"
                                 >
                                     ✓ Aplicar Resultado

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ReactCompareSlider, ReactCompareSliderImage } from 'react-compare-slider';
+import TransparencyCorrector from './editor/TransparencyCorrector';
+import { analyzeTransparency } from '../utils/transparencyAnalysis';
 import './UpscaylView.css';
 
 const UpscaylView: React.FC = () => {
@@ -24,6 +26,10 @@ const UpscaylView: React.FC = () => {
     const [previewBgPath, setPreviewBgPath] = useState<string>('');
     const [previewBgDataUrl, setPreviewBgDataUrl] = useState<string>(''); // Data URL para preview de remoção de fundo
     const [imageError, setImageError] = useState<string>('');
+
+    // Transparency Analysis State
+    const [showTransparencyAnalysis, setShowTransparencyAnalysis] = useState<boolean>(false);
+    const [transparencyImageSrc, setTransparencyImageSrc] = useState<string>('');
 
     // Metadados dos modelos para exibição visual
     const MODEL_METADATA: Record<string, { name: string; description: string; gradient: string }> = {
@@ -169,13 +175,7 @@ const UpscaylView: React.FC = () => {
             );
 
             if (result.success && result.outputPath) {
-                setPreviewBgPath(result.outputPath);
-                // Carregar preview como data URL
-                const dataUrlResult = await window.electronAPI.readFileAsDataUrl(result.outputPath);
-                if (dataUrlResult.success && dataUrlResult.dataUrl) {
-                    setPreviewBgDataUrl(dataUrlResult.dataUrl);
-                }
-                setMessage({ type: 'success', text: 'Preview gerado! Confirme para salvar.' });
+                await handlePostBgRemoval(result.outputPath);
             } else {
                 setMessage({ type: 'error', text: result.error || 'Erro ao remover fundo' });
             }
@@ -253,13 +253,7 @@ const UpscaylView: React.FC = () => {
             );
 
             if (result.success && result.outputPath) {
-                setPreviewBgPath(result.outputPath);
-                // Carregar preview como data URL
-                const dataUrlResult = await window.electronAPI.readFileAsDataUrl(result.outputPath);
-                if (dataUrlResult.success && dataUrlResult.dataUrl) {
-                    setPreviewBgDataUrl(dataUrlResult.dataUrl);
-                }
-                setMessage({ type: 'success', text: 'Preview gerado com alta precisão! Confirme para salvar.' });
+                await handlePostBgRemoval(result.outputPath);
             } else {
                 setMessage({ type: 'error', text: result.error || 'Erro ao remover fundo' });
             }
@@ -268,6 +262,55 @@ const UpscaylView: React.FC = () => {
             setMessage({ type: 'error', text: 'Erro ao processar com InSPyReNet' });
         } finally {
             setRemovingBg(false);
+        }
+    };
+
+    const handlePostBgRemoval = async (outputBgPath: string) => {
+        console.log('[PostBg] Iniciando pós processamento:', outputBgPath);
+        // Carregar preview
+        const dataUrlResult = await window.electronAPI.readFileAsDataUrl(outputBgPath);
+        if (dataUrlResult.success && dataUrlResult.dataUrl) {
+
+            // ANALISAR TRANSPARÊNCIA
+            console.log('[PostBg] Analisando transparência...');
+            const analysis = await analyzeTransparency(dataUrlResult.dataUrl);
+            console.log('[PostBg] Resultado da análise:', analysis);
+
+            if (analysis.hasIssues) {
+                console.log('[Transparency] Issues detected:', analysis.issuePercentage);
+                setTransparencyImageSrc(dataUrlResult.dataUrl);
+                setPreviewBgPath(outputBgPath); // Guardamos o path para saber onde salvar depois
+                setShowTransparencyAnalysis(true);
+                setMessage({ type: 'info', text: '⚠️ Semitransparência detectada! Verifique para evitar falhas de impressão.' });
+            } else {
+                console.log('[PostBg] Sem problemas detectados.');
+                // Sem problemas, mostra direto
+                setPreviewBgPath(outputBgPath);
+                setPreviewBgDataUrl(dataUrlResult.dataUrl);
+                setMessage({ type: 'success', text: 'Preview gerado com sucesso! Nenhuma transparência crítica.' });
+            }
+        } else {
+            console.error('[PostBg] Erro ao carregar DataURL:', dataUrlResult.error);
+            setMessage({ type: 'error', text: 'Erro ao carregar preview' });
+        }
+    };
+
+    const handleApplyTransparencyFix = async (fixedDataUrl: string) => {
+        try {
+            // Salvar dataURL no disco (overwrite previewBgPath)
+            // Usando 'as any' pois acabamos de adicionar no main
+            const res = await (window.electronAPI as any).saveDataUrlToFile(fixedDataUrl, previewBgPath);
+            if (res.success) {
+                // Agora carregamos o resultado final para visualização
+                setPreviewBgDataUrl(fixedDataUrl);
+                setShowTransparencyAnalysis(false);
+                setMessage({ type: 'success', text: 'Correção de transparência aplicada com sucesso!' });
+            } else {
+                setMessage({ type: 'error', text: 'Erro ao salvar correção.' });
+            }
+        } catch (e) {
+            console.error(e);
+            setMessage({ type: 'error', text: 'Falha ao salvar correção.' });
         }
     };
 
@@ -634,6 +677,23 @@ const UpscaylView: React.FC = () => {
                                 })}
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+            {/* Modal de Transparência */}
+            {showTransparencyAnalysis && (
+                <div className="modal-overlay" style={{ zIndex: 2000 }}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()} style={{ width: '90%', height: '90%', maxWidth: '1000px', maxHeight: '800px', padding: 0, overflow: 'hidden', background: '#111' }}>
+                        <TransparencyCorrector
+                            imageSrc={transparencyImageSrc}
+                            onApply={handleApplyTransparencyFix}
+                            onCancel={() => {
+                                setShowTransparencyAnalysis(false);
+                                // Se cancelar, mostra a imagem original sem correção
+                                setPreviewBgPath(previewBgPath);
+                                setPreviewBgDataUrl(transparencyImageSrc);
+                            }}
+                        />
                     </div>
                 </div>
             )}

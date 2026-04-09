@@ -15,6 +15,7 @@ import TitleBar from './components/TitleBar';
 import SpotWhiteWorkspace from './components/SpotWhiteWorkspace';
 import { ToastProvider } from './components/editor/ToastNotification';
 import FilePreviewModal from './components/FilePreviewModal';
+import SuccessModal from './components/SuccessModal';
 import './App.css';
 
 const App: React.FC = () => {
@@ -34,7 +35,9 @@ const App: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [previewFile, setPreviewFile] = useState<{ path: string; name: string } | null>(null);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true); // Inicia colapsada
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
+  const [processingProgress, setProcessingProgress] = useState<{ current: number; total: number; currentFile?: string; status?: 'processing' | 'saving' | 'complete' } | null>(null);
+  const [processResult, setProcessResult] = useState<{ success: number; total: number; folder: string } | null>(null);
 
   const [config, setConfig] = useState(() => {
     const saved = localStorage.getItem('printConfig');
@@ -72,14 +75,36 @@ const App: React.FC = () => {
 
     setIsValidating(true);
     try {
-      const results = await window.electronAPI.validateFiles(files, currentConfig);
-      setValidationResults(results);
-    } catch (error) {
-      console.error('Erro na validação:', error);
-    } finally {
-      setIsValidating(false);
+    const results = await window.electronAPI.validateFiles(files, currentConfig);
+    setValidationResults(results);
+
+    // Verificar se há PDFs multi-páginas para "explodir" na UI
+    const filesToExpand = results.filter(r => 
+      r.info?.pageCount && r.info.pageCount > 1 && !r.file.includes('::')
+    );
+
+    if (filesToExpand.length > 0) {
+      setSelectedFiles(prev => {
+        let next = [...prev];
+        filesToExpand.forEach(item => {
+          const idx = next.indexOf(item.file);
+          if (idx !== -1) {
+            const pages = [];
+            for (let i = 1; i <= item.info.pageCount; i++) {
+              pages.push(`${item.file}::${i}`);
+            }
+            next.splice(idx, 1, ...pages);
+          }
+        });
+        return next;
+      });
     }
-  }, []);
+  } catch (error) {
+    console.error('Erro na validação:', error);
+  } finally {
+    setIsValidating(false);
+  }
+}, [currentView]);
 
   useEffect(() => {
     if (selectedFiles.length > 0) {
@@ -143,6 +168,119 @@ const App: React.FC = () => {
     }
   }, [currentView]);
 
+  const handleFileSelect = async () => {
+    const files = await window.electronAPI.selectFiles();
+    if (files) setSelectedFiles(files);
+  };
+
+  const handleRemoveFile = useCallback((fileToRemove: string) => {
+    setSelectedFiles(prev => prev.filter(f => f !== fileToRemove));
+    setValidationResults(prev => prev.filter(v => v.file !== fileToRemove));
+  }, []);
+
+  const handleProcess = async () => {
+    if (selectedFiles.length === 0 || !outputDir) {
+      // Fallback se não tiver outputDir: pedir agora
+      if (selectedFiles.length > 0 && !outputDir) {
+        const dir = await window.electronAPI.selectOutputDirectory();
+        if (dir) {
+          setOutputDir(dir);
+        }
+      }
+      return;
+    }
+
+    setProcessing(true);
+    setProcessingProgress({ current: 0, total: selectedFiles.length, status: 'processing' });
+
+    try {
+      console.log('Iniciando processamento Spot White otimizado...');
+
+      const filesWithInfo = selectedFiles.map(file => {
+        const validation = validationResults.find(v => v.file === file);
+        return {
+          file,
+          heightCm: validation?.info?.heightCm,
+          pageCount: validation?.info?.pageCount || 1
+        };
+      });
+
+      // Processar via IPC
+      const finalResults: any[] = [];
+      for (let i = 0; i < filesWithInfo.length; i++) {
+        const item = filesWithInfo[i];
+        let filePath = typeof item.file === 'string' ? item.file : (item.file as any).path || String(item.file);
+        let page = 1;
+
+        if (filePath.includes('::')) {
+          const parts = filePath.split('::');
+          filePath = parts[0];
+          page = parseInt(parts[1], 10) || 1;
+        }
+
+        const fileName = filePath.split(/[/\\]/).pop();
+        const displayLabel = item.file.includes('::') ? `${fileName} (Pág ${page})` : fileName;
+        
+        setProcessingProgress({
+          current: i + 1,
+          total: filesWithInfo.length,
+          currentFile: displayLabel,
+          status: 'processing'
+        });
+
+        // Passamos o objeto estruturado mas garantimos que o file seja string
+        const singleResult = await window.electronAPI.processSpotWhite(
+          [{ file: filePath, heightCm: item.heightCm, page } as any],
+          outputDir,
+          geminiApiKey,
+          clientName,
+          spotWhiteMode
+        );
+        finalResults.push(...singleResult.map((res: any) => ({ ...res, file: item.file })));
+      }
+
+      setValidationResults(prev => {
+        const newResults = [...prev];
+        finalResults.forEach((res: any) => {
+          const idx = newResults.findIndex(r => r.file === res.file);
+          if (idx !== -1) {
+            newResults[idx] = {
+              ...newResults[idx],
+              valid: res.success,
+              errors: res.error ? [res.error] : [],
+              info: { ...newResults[idx].info, savedAt: res.outputPath }
+            };
+          }
+        });
+        return newResults;
+      });
+
+      const successfulFiles = finalResults.filter((r: any) => r.success).map((r: any) => r.file);
+      if (successfulFiles.length > 0) {
+        setProcessedFiles(prev => {
+          const newSet = new Set(prev);
+          successfulFiles.forEach((f: any) => newSet.add(f));
+          return newSet;
+        });
+      }
+
+      // Mostrar modal de sucesso
+      if (successfulFiles.length > 0) {
+        setProcessResult({
+          success: successfulFiles.length,
+          total: selectedFiles.length,
+          folder: outputDir
+        });
+      }
+
+    } catch (error) {
+      console.error('Erro fatal no processamento:', error);
+    } finally {
+      setProcessing(false);
+      setProcessingProgress(null);
+    }
+  };
+
   if (showSplash) {
     return <SplashScreen onComplete={() => setShowSplash(false)} />;
   }
@@ -157,68 +295,6 @@ const App: React.FC = () => {
       </ToastProvider>
     );
   }
-
-  const handleFileSelect = async () => {
-    const files = await window.electronAPI.selectFiles();
-    if (files) setSelectedFiles(files);
-  };
-
-  const handleProcess = async () => {
-    if (selectedFiles.length === 0 || !outputDir) {
-      // Fallback se não tiver outputDir: pedir agora
-      if (selectedFiles.length > 0 && !outputDir) {
-        const dir = await window.electronAPI.selectOutputDirectory();
-        if (dir) {
-          setOutputDir(dir);
-          // Continua na proxima renderizacao ou chama recursivo, mas melhor o usuario clicar de novo para confirmar
-        }
-      }
-      return;
-    }
-
-    setProcessing(true);
-    try {
-      console.log('Iniciando processamento Spot White...');
-
-      // Chamada ao Backend (Electron + Photoshop + Gemini)
-      const results = await window.electronAPI.processSpotWhite(
-        selectedFiles,
-        outputDir,
-        geminiApiKey,
-        clientName,
-        spotWhiteMode
-      );
-
-      console.log('Resultados:', results);
-
-      // Atualizar resultados de validação com o sucesso/erro do processamento
-      // (Aqui poderíamos ter um estado separado para resultados de processamento)
-      setValidationResults(() => {
-        // Mesclar resultados
-        return results.map((res: any) => ({
-          file: res.file,
-          valid: res.success,
-          errors: res.error ? [res.error] : [],
-          info: res.outputPath ? { savedAt: res.outputPath } : null
-        }));
-      });
-
-      // Marcar arquivos com sucesso como processados
-      const successfulFiles = results.filter((r: any) => r.success).map((r: any) => r.file);
-      if (successfulFiles.length > 0) {
-        setProcessedFiles(prev => {
-          const newSet = new Set(prev);
-          successfulFiles.forEach((f: any) => newSet.add(f));
-          return newSet;
-        });
-      }
-
-    } catch (error) {
-      console.error('Erro fatal no processamento:', error);
-    } finally {
-      setProcessing(false);
-    }
-  };
 
   return (
     <ToastProvider>
@@ -285,6 +361,8 @@ const App: React.FC = () => {
                 onConfigChange={setConfig}
                 isValidating={isValidating}
                 onPreviewFile={(path: string, name: string) => setPreviewFile({ path, name })}
+                onRemoveFile={handleRemoveFile}
+                processingProgress={processingProgress}
               />
             ) : currentView === 'editor' ? (
               <EditorView geminiApiKey={geminiApiKey} kieAiApiKey={kieAiApiKey} />
@@ -323,6 +401,15 @@ const App: React.FC = () => {
             onClose={() => setPreviewFile(null)}
             filePath={previewFile.path}
             fileName={previewFile.name}
+          />
+        )}
+        {processResult && (
+          <SuccessModal
+            isOpen={!!processResult}
+            onClose={() => setProcessResult(null)}
+            successCount={processResult.success}
+            totalCount={processResult.total}
+            outputFolder={processResult.folder}
           />
         )}
       </div>

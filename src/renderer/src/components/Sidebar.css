@@ -101,15 +101,24 @@
   overflow: hidden;
 }
 
+.icon-container-fixed {
+  width: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .nav-section {
   display: flex;
   flex-direction: column;
   gap: 12px;
   flex: 1;
+  align-items: flex-start;
 }
 
 .collapsed .nav-section {
-  overflow: visible;
+  align-items: center;
 }
 
 .nav-item {
@@ -136,9 +145,8 @@
   height: 48px;
   padding: 0;
   justify-content: center;
-  margin: 0 auto;
+  margin: 0;
   gap: 0;
-  overflow: visible;
 }
 
 .nav-item:hover {
@@ -157,8 +165,6 @@
 .nav-item .icon,
 .nav-item svg {
   font-size: 20px;
-  min-width: 24px;
-  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -173,12 +179,7 @@
   color: #a855f7;
 }
 
-.collapsed .nav-item .icon,
-.collapsed .nav-item svg {
-  margin: 0;
-}
-
-/* Custom Tooltips - Liquid Glass Premium */
+/* Custom Tooltips */
 .collapsed .nav-item[data-tooltip] {
   position: relative;
 }
@@ -191,7 +192,6 @@
   transform: translateY(-50%);
   background: linear-gradient(135deg, rgba(10, 10, 18, 0.98) 0%, rgba(20, 15, 30, 0.98) 100%);
   backdrop-filter: blur(25px) saturate(180%);
-  -webkit-backdrop-filter: blur(25px) saturate(180%);
   color: white;
   padding: 10px 18px;
   border-radius: 10px;
@@ -199,14 +199,9 @@
   font-weight: 600;
   white-space: nowrap;
   z-index: 99999;
-  pointer-events: none;
   border: 1px solid rgba(168, 85, 247, 0.4);
-  box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.6),
-    0 0 20px rgba(168, 85, 247, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
   animation: tooltipSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  letter-spacing: 0.3px;
 }
 
 .collapsed .nav-item[data-tooltip]:hover::before {
@@ -215,14 +210,10 @@
   left: calc(100% + 12px);
   top: 50%;
   transform: translateY(-50%);
-  width: 0;
-  height: 0;
   border-style: solid;
   border-width: 7px 8px 7px 0;
   border-color: transparent rgba(168, 85, 247, 0.4) transparent transparent;
-  filter: drop-shadow(-1px 0 2px rgba(0, 0, 0, 0.3));
   z-index: 99999;
-  pointer-events: none;
   animation: tooltipSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -241,7 +232,6 @@
 /* Toggle Button */
 .sidebar-toggle {
   position: absolute;
-  top: auto;
   bottom: 20px;
   right: 12px;
   width: 32px;
@@ -260,8 +250,8 @@
 }
 
 .collapsed .sidebar-toggle {
-  right: 50%;
-  transform: translateX(50%);
+  right: 22px;
+  /* 80px/2 - 36px/2 = 40-18 = 22px de margem ou posição center */
   width: 36px;
   height: 36px;
 }
@@ -271,20 +261,18 @@
   box-shadow: 0 6px 20px rgba(168, 85, 247, 0.5);
 }
 
-.collapsed .sidebar-toggle:hover {
-  transform: translateX(50%) scale(1.1);
-}
-
 .sidebar-footer {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding-top: 20px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 100%;
+  align-items: flex-start;
 }
 
 .collapsed .sidebar-footer {
-  overflow: visible;
+  align-items: center;
 }
 
 .status-indicator {
@@ -297,11 +285,16 @@
   color: #22c55e;
   font-size: 11px;
   font-weight: 600;
+  transition: all 0.3s ease;
 }
 
 .collapsed .status-indicator {
-  padding: 10px 0;
+  width: 48px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
   justify-content: center;
+  margin: 10px 0;
 }
 
 .status-indicator .dot {
@@ -310,7 +303,11 @@
   background: currentColor;
   border-radius: 50%;
   box-shadow: 0 0 10px currentColor;
+  flex-shrink: 0;
 }
+
+
+
 
 /* WIZARD STYLES */
 .wizard-title {

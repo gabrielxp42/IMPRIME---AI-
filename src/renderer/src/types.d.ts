@@ -35,6 +35,28 @@ declare global {
             exportLogs: () => Promise<{ success: boolean; path?: string; error?: string }>;
             openLogsDir: () => Promise<{ success: boolean; error?: string }>;
             cancelProcessing: () => Promise<{ success: boolean }>;
+            openExternal: (url: string) => Promise<void>;
+            on: (channel: string, func: (...args: any[]) => void) => void;
+            removeListener: (channel: string, func: (...args: any[]) => void) => void;
         };
     }
+}
+declare module "*.png" {
+    const value: string;
+    export default value;
+}
+
+declare module "*.jpg" {
+    const value: string;
+    export default value;
+}
+
+declare module "*.jpeg" {
+    const value: string;
+    export default value;
+}
+
+declare module "*.svg" {
+    const value: string;
+    export default value;
 }

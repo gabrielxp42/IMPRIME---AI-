@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import Konva from 'konva';
 import { Stage, Layer, Transformer, Rect, Group, Image, Text, Line, Circle } from 'react-konva';
 import useImage from 'use-image';
@@ -29,6 +29,20 @@ interface KonvaCanvasProps {
     stagePos?: { x: number, y: number };
     onScaleChange?: (scale: number) => void;
     onStagePosChange?: (pos: { x: number, y: number }) => void;
+
+    transparencyWarning?: { id: string, percentage: number, thumbnail?: string } | null;
+    onFixTransparency?: (id: string) => void;
+    onIgnoreTransparency?: () => void;
+
+    // Empty Space Props
+    emptySpaceWarning?: { id: string, percentage: number, thumbnail?: string } | null;
+    onTrimEmptySpace?: (id: string) => void;
+    onIgnoreEmptySpace?: () => void;
+}
+
+export interface KonvaCanvasHandle {
+    getStage: () => Konva.Stage | null;
+    getLayer: () => Konva.Layer | null;
 }
 
 // Sub-components
@@ -91,14 +105,21 @@ const MemoizedRenderItem = React.memo(({ item, onDragStart, onDragMove, onDragEn
     return true;
 });
 
-const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
+const KonvaCanvas = forwardRef<KonvaCanvasHandle, KonvaCanvasProps>(({
     images, currentSelectedIds = [], onSelect, onSelectMultiple, onTransform, onUpdateMany,
     onDrop, onDragOver, width = 800, height = 600, backgroundColor = 'white',
     onDelete, onDuplicate, onRemoveBackground, onTrim, onBringToFront, onSendToBack, availableFonts,
-    scale: externalScale, stagePos: externalStagePos, onScaleChange, onStagePosChange
-}) => {
+    scale: externalScale, stagePos: externalStagePos, onScaleChange, onStagePosChange,
+    transparencyWarning, onFixTransparency, onIgnoreTransparency,
+    emptySpaceWarning, onTrimEmptySpace, onIgnoreEmptySpace
+}, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const stageRef = useRef<Konva.Stage>(null);
+
+    useImperativeHandle(ref, () => ({
+        getStage: () => stageRef.current,
+        getLayer: () => artboardLayerRef.current
+    }));
     const artboardLayerRef = useRef<Konva.Layer>(null);
     const transformerRef = useRef<Konva.Transformer>(null);
 
@@ -117,6 +138,8 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
     const selectionStartPos = useRef<{ x: number, y: number } | null>(null);
     const [guides, setGuides] = useState<SnapLine[]>([]);
     const [distances, setDistances] = useState<any[]>([]);
+    const [isTransforming, setIsTransforming] = useState(false);
+
     const [ghosts, setGhosts] = useState<any[]>([]);
     const ghostsRef = useRef<any[]>([]);
     const isAltDragging = useRef(false);
@@ -161,17 +184,26 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
     }, [images, calculateOutOfBoundsCount]);
 
 
+
+    const lastSizeRef = useRef({ width: 0, height: 0 });
+
     useLayoutEffect(() => {
         if (!containerRef.current) return;
         const resizeObserver = new ResizeObserver(entries => {
             for (let entry of entries) {
                 const { width: w, height: h } = entry.contentRect;
-                setSize({ width: w, height: h });
+                if (Math.abs(w - lastSizeRef.current.width) > 0.5 || Math.abs(h - lastSizeRef.current.height) > 0.5) {
+                    lastSizeRef.current = { width: w, height: h };
+                    setSize({ width: w, height: h });
+                }
             }
         });
         resizeObserver.observe(containerRef.current);
         const { clientWidth, clientHeight } = containerRef.current;
-        if (clientWidth > 0) setSize({ width: clientWidth, height: clientHeight });
+        if (clientWidth > 0) {
+            lastSizeRef.current = { width: clientWidth, height: clientHeight };
+            setSize({ width: clientWidth, height: clientHeight });
+        }
         return () => resizeObserver.disconnect();
     }, []);
 
@@ -338,8 +370,8 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
             if (onStagePosChange) onStagePosChange(newPos);
         } else {
             const newPos = {
-                x: targetPos.current.x - e.evt.deltaX,
-                y: targetPos.current.y - e.evt.deltaY
+                x: targetPos.current.x + e.evt.deltaX,
+                y: targetPos.current.y + e.evt.deltaY
             };
             targetPos.current = newPos;
             if (onStagePosChange) onStagePosChange(newPos);
@@ -449,10 +481,22 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
             onFontSizeChange: (s: number) => onTransform(id, { fontSize: s }),
             onFontFamilyChange: (f: string) => onTransform(id, { fontFamily: f }),
             onAlignChange: (a: any) => onTransform(id, { align: a }),
-            onCaseChange: () => { }, onFontStyleChange: (s: string) => onTransform(id, { fontStyle: s }),
+            onCaseChange: () => { },
+            onFontStyleChange: (s: string) => onTransform(id, { fontStyle: s }),
             onTextDecorationChange: (d: string) => onTransform(id, { textDecoration: d }),
-            availableFonts, isTransforming: false
+            availableFonts,
+            isTransforming,
+            // Detecção de baixa resolução: Se a escala for maior que 1.05 (mínima tolerância)
+            lowDpiCount: (img.type === 'image' && (img.scaleX > 1.05 || img.scaleY > 1.05)) ? 1 : 0,
+            // Detecção de Avisos do Elemento Selecionado
+            hasTransparencyWarning: (transparencyWarning && transparencyWarning.id === id),
+            hasEmptySpaceWarning: (emptySpaceWarning && emptySpaceWarning.id === id),
+            onFixTransparency: () => onFixTransparency?.(id),
+            onIgnoreTransparency,
+            onTrimEmptySpace: () => onTrimEmptySpace?.(id),
+            onIgnoreEmptySpace
         };
+
     };
 
     const floatingBarProps = getFloatingBarProps();
@@ -691,7 +735,25 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
                             ))}
                         </Group>
                     </Group>
-                    <Transformer ref={transformerRef} keepRatio={true} padding={0} borderStroke="#a855f7" strokeWidth={1} anchorStroke="#a855f7" anchorFill="#ffffff" anchorSize={8} anchorCornerRadius={2} rotationSnaps={[0, 45, 90, 135, 180, 225, 270, 315]} rotationSnapTolerance={10} enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right', 'top-center', 'bottom-center', 'middle-left', 'middle-right']} boundBoxFunc={(o, n) => n.width < 5 || n.height < 5 ? o : n} />
+                    <Transformer
+                        ref={transformerRef}
+                        keepRatio={true}
+                        padding={0}
+                        borderStroke="#a855f7"
+                        strokeWidth={1}
+                        anchorStroke="#a855f7"
+                        anchorFill="#ffffff"
+                        anchorSize={8}
+                        anchorCornerRadius={2}
+                        rotationSnaps={[0, 45, 90, 135, 180, 225, 270, 315]}
+                        rotationSnapTolerance={10}
+                        enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right', 'top-center', 'bottom-center', 'middle-left', 'middle-right']}
+                        boundBoxFunc={(o, n) => n.width < 5 || n.height < 5 ? o : n}
+                        onTransformStart={() => setIsTransforming(true)}
+                        onTransformEnd={() => setIsTransforming(false)}
+                        onDragStart={() => setIsTransforming(true)}
+                        onDragEnd={() => setIsTransforming(false)}
+                    />
                     {selectionRect && <Rect fill="rgba(168, 85, 247, 0.1)" stroke="#a855f7" strokeWidth={1} {...selectionRect} />}
                     {guides.map((g, i) => {
                         const Magenta = '#d946ef'; const sw = 1.5 / scale; const dash = [4 / scale, 4 / scale];
@@ -710,28 +772,43 @@ const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
                 </Layer>
             </Stage>
             {floatingBarProps && <FloatingElementBar {...floatingBarProps as any} />}
-            {liveOutOfBoundsCount > 0 && (
-                <div style={{ position: 'absolute', right: '24px', top: '24px', zIndex: 10000, animation: 'floatAndPulse 0.4s ease' }}>
-                    <div style={{ background: 'rgba(20, 20, 25, 0.8)', backdropFilter: 'blur(30px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '24px', padding: '16px', display: 'flex', flexDirection: 'column', width: '260px', gap: '12px', boxShadow: '0 20px 40px rgba(0,0,0,0.4)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #a855f7, #ec4899)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></svg>
+            {/* NOTIFICATION STACK CONTAINER */}
+            <div style={{
+                position: 'absolute',
+                top: '24px',
+                right: '24px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px',
+                zIndex: 10000,
+                pointerEvents: 'none', // Allow clicks to pass through gaps
+                alignItems: 'flex-end', // Align right
+            }}>
+                {/* 1. Objects Outside Notification */}
+                {liveOutOfBoundsCount > 0 && (
+                    <div style={{ pointerEvents: 'auto', animation: 'floatAndPulse 0.4s ease' }}>
+                        <div style={{ background: 'rgba(20, 20, 25, 0.8)', backdropFilter: 'blur(30px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '24px', padding: '16px', display: 'flex', flexDirection: 'column', width: '260px', gap: '12px', boxShadow: '0 20px 40px rgba(0,0,0,0.4)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg, #a855f7, #ec4899)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /></svg>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <span style={{ color: '#fff', fontSize: '14px', fontWeight: '700' }}>Objetos Fora</span>
+                                    <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px' }}>{liveOutOfBoundsCount} itens detectados</span>
+                                </div>
                             </div>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{ color: '#fff', fontSize: '14px', fontWeight: '700' }}>Objetos Fora</span>
-                                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px' }}>{liveOutOfBoundsCount} itens detectados</span>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button onClick={handleFitScreen} style={{ flex: 1, padding: '10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer', transition: '0.2s' }}>FOCAR PÁGINA</button>
+                                <button onClick={handleRevealAll} style={{ flex: 1, padding: '10px', background: 'linear-gradient(135deg, #a855f7, #ec4899)', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer', transition: '0.2s' }}>VER TUDO</button>
                             </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                            <button onClick={handleFitScreen} style={{ flex: 1, padding: '10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer', transition: '0.2s' }}>FOCAR PÁGINA</button>
-                            <button onClick={handleRevealAll} style={{ flex: 1, padding: '10px', background: 'linear-gradient(135deg, #a855f7, #ec4899)', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '11px', fontWeight: '700', cursor: 'pointer', transition: '0.2s' }}>VER TUDO</button>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
+
+            </div>
             <style>{`@keyframes floatAndPulse { 0% { opacity: 0; transform: translateY(-10px); } 100% { opacity: 1; transform: translateY(0); } }`}</style>
         </div>
     );
-};
+});
 
-export default KonvaCanvas;
+export default React.memo(KonvaCanvas);

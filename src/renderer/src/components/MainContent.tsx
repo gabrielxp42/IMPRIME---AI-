@@ -27,7 +27,6 @@ interface MainContentProps {
 const FileCard = React.memo(({
   file,
   validation,
-  isHovered,
   onMouseEnter,
   onMouseLeave,
   onPreviewFile,
@@ -36,14 +35,24 @@ const FileCard = React.memo(({
 }: {
   file: string;
   validation: any;
-  isHovered: boolean;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onPreviewFile?: (path: string, name: string) => void;
   onRemoveFile?: (file: string) => void;
   isProcessed: boolean;
 }) => {
-  const fileName = file.split('\\').pop() || file.split('/').pop() || file;
+  const isSplit = file.includes('::');
+  let baseFile = file;
+  let pageNumber = '';
+  
+  if (isSplit) {
+    const parts = file.split('::');
+    baseFile = parts[0];
+    pageNumber = parts[1];
+  }
+
+  const fileName = baseFile.split(/[/\\]/).pop() || baseFile;
+  const displayFileName = isSplit ? `${fileName} (Pg ${pageNumber})` : fileName;
   const isValidated = validation !== undefined;
   const isValid = validation?.valid === true;
   const isInvalid = validation?.valid === false;
@@ -53,7 +62,7 @@ const FileCard = React.memo(({
       className={`file-card ${isInvalid ? 'file-card-error' : isValid ? 'file-card-valid' : ''} ${isProcessed ? 'file-card-processed' : ''}`}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      onClick={() => onPreviewFile?.(file, fileName)}
+      onClick={() => onPreviewFile?.(file, displayFileName)}
       role="article"
       tabIndex={0}
       style={{ cursor: 'pointer' }}
@@ -71,7 +80,7 @@ const FileCard = React.memo(({
         </div>
         <FileThumbnail filePath={file} fileName={fileName} />
       </div>
-      <div className="file-name" title={fileName}>{fileName}</div>
+      <div className="file-name" title={displayFileName}>{displayFileName}</div>
 
       {isProcessed ? (
         <div className="file-status processed">✓ Processado</div>
@@ -250,7 +259,6 @@ const MainContent: React.FC<MainContentProps> = ({
                 key={file}
                 file={file}
                 validation={validationMap.get(file)}
-                isHovered={hoveredFile === file}
                 onMouseEnter={() => {
                   const v = validationMap.get(file);
                   if (v && !v.valid) handleFileHover(file, v);
@@ -275,7 +283,6 @@ const MainContent: React.FC<MainContentProps> = ({
                     key={`proc-${file}`}
                     file={file}
                     validation={validationMap.get(file)}
-                    isHovered={false}
                     onMouseEnter={() => { }}
                     onMouseLeave={() => { }}
                     onPreviewFile={onPreviewFile}

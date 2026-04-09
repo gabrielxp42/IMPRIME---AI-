@@ -36,6 +36,7 @@ interface SpotWhiteWorkspaceProps {
     onConfigChange: (config: Config) => void;
     isValidating?: boolean;
     onPreviewFile: (path: string, name: string) => void;
+    processingProgress: { current: number; total: number; currentFile?: string; status?: 'processing' | 'saving' | 'complete' } | null;
 }
 
 const SpotWhiteWorkspace: React.FC<SpotWhiteWorkspaceProps> = (props) => {
@@ -53,6 +54,7 @@ const SpotWhiteWorkspace: React.FC<SpotWhiteWorkspaceProps> = (props) => {
                     processing={props.processing}
                     geminiApiKey={props.geminiApiKey}
                     processedFiles={props.processedFiles}
+                    processingProgress={props.processingProgress}
                     onFileSelect={props.onFileSelect}
                     onPreviewFile={props.onPreviewFile}
                 />

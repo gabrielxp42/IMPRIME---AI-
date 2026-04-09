@@ -3,23 +3,20 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
     Download,
     X,
-    Plus,
     Send,
-    Bot,
-    User,
     ImagePlus,
-    RefreshCw,
     Loader2,
     Sparkles,
-    Image as ImageIcon,
-    Palette,
-    Monitor,
-    Maximize2
+    RefreshCw
 } from 'lucide-react';
 import './MockupsView.css';
 import model1 from '../assets/modelo-mck-01.png';
 import model2 from '../assets/modelo-mck-02.jpg';
 import model3 from '../assets/modelo-mck-03.jpg';
+import { useCredits } from '../contexts/CreditContext';
+import { supabase } from '../lib/supabase'; // Restore supabase import
+
+// ...
 
 interface UploadedImage {
     id: string;
@@ -61,6 +58,7 @@ interface PendingImage {
 }
 
 const MockupsView: React.FC<MockupsViewProps> = ({ kieAiApiKey }) => {
+    const { deductCost } = useCredits();
     const [selectedModel, setSelectedModel] = useState(MOCKUP_MODELS[0]);
     const [selectedColor, setSelectedColor] = useState(COLORS[1]);
 
@@ -205,6 +203,17 @@ const MockupsView: React.FC<MockupsViewProps> = ({ kieAiApiKey }) => {
         setMessages(prev => [...prev, processingMsg]);
 
         try {
+            // 1. Check Credits (Custo justo sobre custo real 4)
+            const COST_PER_MOCKUP = 5;
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Faça login para continuar');
+
+            // Use global context for deduction
+            const success = await deductCost(COST_PER_MOCKUP);
+            if (!success) {
+                throw new Error(`Saldo insuficiente. Necessário: ${COST_PER_MOCKUP} créditos.`);
+            }
+
             const base64Model = await urlToBase64(selectedModel.image);
             const userArtsBase64 = allSessionImages.map(img => img.dataUrl.split(',')[1]);
 

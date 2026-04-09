@@ -87,6 +87,7 @@ export interface GroupElement {
     visible: boolean;
     locked: boolean;
     name?: string;
+    opacity?: number;
     children: CanvasElement[];
 }
 
@@ -109,6 +110,7 @@ export interface ImageElement {
     locked: boolean;
     name?: string;
     opacity?: number;
+    groupId?: string; // Para identificar grupos de smart_grid (ex: 'grid-123')
     // Filtros de imagem
     filters?: {
         brightness?: number; // -1 a 1
@@ -139,5 +141,22 @@ export interface DocumentSettings {
     heightCm?: number;
     name?: string;
     backgroundColor?: 'transparent' | 'white' | 'black';
+
+}
+
+export interface HistoryState {
+    images: CanvasElement[];
+    selectedId: string | null;
+    selectedIds?: string[];
+}
+
+export interface Document {
+    id: string;
+    settings: DocumentSettings;
+    images: CanvasElement[];
+    selectedIds: string[];
+    history: HistoryState[];
+    historyIndex: number;
+    hasUnsavedChanges: boolean;
 }
 

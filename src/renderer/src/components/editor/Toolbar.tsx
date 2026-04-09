@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import './Toolbar.css';
 
-type Tool = 'select' | 'crop' | 'eraser' | 'background-removal' | 'add-image' | 'upscale' | 'shapes' | 'text';
+export type Tool = 'select' | 'crop' | 'eraser' | 'background-removal' | 'add-image' | 'upscale' | 'shapes' | 'text';
 
 interface ToolbarProps {
     activeTool: Tool;
@@ -346,4 +346,4 @@ const Toolbar: React.FC<ToolbarProps> = ({
     );
 };
 
-export default Toolbar;
+export default React.memo(Toolbar);

@@ -19,11 +19,15 @@ textarea,
   flex-direction: column;
   width: 100vw;
   height: 100vh;
-  /* ... resto do css ... */
+  /* Use margin instead of padding to avoid box-model ambiguity with 100vh */
+  /* padding-top: 36px; REMOVED */
   background: radial-gradient(circle at top left, #1a1033 0%, #0f0f1e 100%);
   color: var(--text-primary);
   overflow: hidden;
+  /* Strict overflow */
   position: relative;
+  box-sizing: border-box;
+  /* Enforce */
 }
 
 /* Liquid Glass Background - Brand Contrast */
@@ -57,10 +61,14 @@ textarea,
   display: flex;
   flex: 1;
   overflow: hidden;
-  height: calc(100vh - 30px);
+  /* Explicit height calculation to guarantee fit */
+  height: calc(100vh - 36px);
+  margin-top: 36px;
+  /* Push down for TitleBar */
   position: relative;
   z-index: 1;
   background: rgba(15, 23, 42, 0.3);
+  box-sizing: border-box;
 }
 
 .main-viewport {

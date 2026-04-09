@@ -67,21 +67,21 @@ def remove_background_advanced(input_path, output_path, remove_internal_blacks=F
         if input_image.mode != 'RGB':
             input_image = input_image.convert('RGB')
         
-        # OTIMIZAÇÃO: Redimensionar para modo ultra-rápido
-        MAX_DIMENSION = 720 # Reduzido de 1024 para ganho de performance
+        # OTIMIZAÇÃO: Qualidade superior para DTF (ISNET é o estado da arte para bordas limpas)
+        MAX_DIMENSION = 2500 
         if max(original_size) > MAX_DIMENSION:
-            print(f"PROGRESS:Otimizando para velocidade...", file=sys.stderr, flush=True)
+            print(f"PROGRESS:Redimensionando para {MAX_DIMENSION}px (limite para performance)...", file=sys.stderr, flush=True)
             ratio = MAX_DIMENSION / max(original_size)
             new_size = (int(original_size[0] * ratio), int(original_size[1] * ratio))
             input_image = input_image.resize(new_size, Image.Resampling.LANCZOS)
         
-        # Modo Rápido usa u2netp (Pequeno e Veloz)
-        model_name = "u2netp" 
+        # Modo Alta Precisão: isnet-general-use (Melhor para logos e bordas complexas)
+        model_name = "isnet-general-use" 
         try:
             session = new_session(model_name)
         except Exception as e:
-            print(f"WARNING:Erro ao carregar modelo {model_name}: {e}. Usando fallback...", file=sys.stderr, flush=True)
-            session = new_session("u2netp")
+            print(f"WARNING:Erro ao carregar modelo {model_name}: {e}. Baixando modelo de alta precisão (pode demorar na primeira vez)...", file=sys.stderr, flush=True)
+            session = new_session(model_name)
 
         print(f"PROGRESS:Removendo fundo (Modo Ultra-Rápido)...", file=sys.stderr, flush=True)
         

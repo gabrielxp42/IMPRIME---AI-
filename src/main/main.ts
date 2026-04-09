@@ -87,6 +87,28 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  // Notify renderer when window maximize state changes
+  mainWindow.on('maximize', () => {
+    mainWindow?.webContents.send('window-maximize-change', true);
+  });
+
+  mainWindow.on('unmaximize', () => {
+    mainWindow?.webContents.send('window-maximize-change', false);
+  });
+
+  // INTERCEPTAR QUALQUER TENTATIVA DE ABRIR JANELAS (window.open)
+  // Isso evita que o Electron abra janelas padrão com aquela barra amarela
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.includes('stripe.com') || url.includes('buy.stripe.com')) {
+      // Usar nosso handler customizado de checkout
+      ipcMain.emit('open-external-custom', null, url);
+      return { action: 'deny' };
+    }
+    // Para outros links, abrir no navegador padrão
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
 }
 
 app.whenReady().then(() => {
@@ -139,6 +161,123 @@ ipcMain.handle('window-minimize', () => {
   if (mainWindow) mainWindow.minimize();
 });
 
+ipcMain.handle('open-external', async (_event, url) => {
+  // Se for um link do Stripe, abrir em uma janela controlada para melhor UX
+  if (url.includes('stripe.com') || url.includes('buy.stripe.com')) {
+    const checkoutWin = new BrowserWindow({
+      width: 650,
+      height: 850,
+      title: 'Finalizar Pagamento - Imprime AI',
+      backgroundColor: '#1a1a2e',
+      frame: false, // Remove a barra amarela
+      parent: mainWindow || undefined,
+      modal: true,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+      }
+    });
+
+    checkoutWin.setMenu(null);
+    checkoutWin.loadURL(url);
+
+    checkoutWin.once('ready-to-show', () => {
+      checkoutWin.show();
+    });
+
+    // Função única para processar o final do pagamento
+    const processPaymentEnd = (currentUrl: string) => {
+      console.log('[Checkout Detect]:', currentUrl);
+      // Checar se voltou para o localhost ou se tem o parâmetro de sucesso
+      if (currentUrl.includes('payment=success') || currentUrl.includes('localhost:5173') || currentUrl.includes('localhost:5174') || (currentUrl.includes('localhost') && currentUrl.includes('payment'))) {
+        try {
+          const urlObj = new URL(currentUrl);
+          const plan = urlObj.searchParams.get('plan');
+          const refill = urlObj.searchParams.get('refill');
+
+          if (mainWindow) {
+            mainWindow.webContents.send('payment-completed', {
+              plan: plan ? parseInt(plan) : null,
+              refill: refill === 'true' || refill === '50' || !!refill
+            });
+            mainWindow.focus();
+          }
+
+        } catch (e) {
+          console.error('[Checkout Error Parsing]:', e);
+          if (mainWindow) {
+            mainWindow.webContents.send('payment-completed', { success: true });
+            mainWindow.focus();
+          }
+        } finally {
+          setTimeout(() => { if (!checkoutWin.isDestroyed()) checkoutWin.close(); }, 100);
+        }
+      }
+    };
+
+    // Vários eventos para garantir que pegamos o redirecionamento sob qualquer condição
+    checkoutWin.webContents.on('will-navigate', (e, navUrl) => processPaymentEnd(navUrl));
+    checkoutWin.webContents.on('did-start-navigation', (e, navUrl) => processPaymentEnd(navUrl));
+    checkoutWin.webContents.on('did-finish-load', () => processPaymentEnd(checkoutWin.webContents.getURL()));
+
+    // Adicionar um cabeçalho customizado para permitir arrastar e fechar (Premium UX)
+    checkoutWin.webContents.on('did-finish-load', () => {
+      checkoutWin.webContents.insertCSS(`
+        .imprime-ui-header {
+          -webkit-app-region: drag;
+          height: 40px;
+          width: 100%;
+          position: fixed;
+          top: 0;
+          left: 0;
+          background: #0f172a;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 15px;
+          z-index: 999999;
+          border-bottom: 1px solid rgba(255,255,255,0.05);
+          font-family: sans-serif;
+          color: #94a3b8;
+          font-size: 11px;
+          font-weight: bold;
+          letter-spacing: 1px;
+        }
+        .imprime-ui-close {
+          -webkit-app-region: no-drag;
+          cursor: pointer;
+          color: #ef4444;
+          padding: 5px 12px;
+          background: rgba(239, 68, 68, 0.1);
+          border-radius: 6px;
+          transition: all 0.2s;
+        }
+        .imprime-ui-close:hover {
+          background: #ef4444;
+          color: white;
+        }
+        body { margin-top: 40px !important; }
+      `);
+
+      checkoutWin.webContents.executeJavaScript(`
+        if (!document.querySelector('.imprime-ui-header')) {
+          const header = document.createElement('div');
+          header.className = 'imprime-ui-header';
+          header.innerHTML = \`
+            <span>IMPRIME AI - PAGAMENTO SEGURO</span>
+            <div class="imprime-ui-close">FECHAR JANELA</div>
+          \`;
+          header.querySelector('.imprime-ui-close').onclick = () => window.close();
+          document.body.prepend(header);
+        }
+      `);
+    });
+  } else {
+    await shell.openExternal(url);
+  }
+});
+
 ipcMain.handle('window-maximize', () => {
   if (mainWindow) {
     if (mainWindow.isMaximized()) {
@@ -152,6 +291,11 @@ ipcMain.handle('window-maximize', () => {
 ipcMain.handle('window-close', () => {
   if (mainWindow) mainWindow.close();
 });
+
+ipcMain.handle('window-is-maximized', () => {
+  return mainWindow?.isMaximized() || false;
+});
+
 
 // IPC Handlers
 ipcMain.handle('get-system-fonts', async () => {
@@ -227,53 +371,200 @@ ipcMain.handle('read-file-as-data-url', async (_event, filePath: string) => {
   }
 });
 
+// IPC Handler: Salvar Data URL em Arquivo
+ipcMain.handle('save-data-url-to-file', async (_event, dataUrl: string, targetPath: string) => {
+  try {
+    const fs = require('fs');
+    // Remove cabeçalho do data URL
+    const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, "");
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    fs.writeFileSync(targetPath, buffer);
+    return { success: true, path: targetPath };
+  } catch (error) {
+    console.error('Erro ao salvar arquivo DataURL:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
 // Handler for thumbnails (TIFF/PDF/Large Images support)
 ipcMain.handle('get-thumbnail', async (_event, filePath: string) => {
+  let actualPath = filePath;
+  let page = 1;
+
+  if (filePath.includes('::')) {
+    const parts = filePath.split('::');
+    actualPath = parts[0];
+    page = parseInt(parts[1], 10) || 1;
+  }
+
+  // Normalizar caminho para o SO (importante no Windows)
+  actualPath = path.resolve(actualPath);
+
+  const ext = path.extname(actualPath).toLowerCase();
+
+  // Se for PDF, tentar usar Sharp para a página específica
+  if (ext === '.pdf') {
+    try {
+      const sharp = require('sharp');
+      
+      // Tentar primeiro com o caminho direto
+      try {
+        const buffer = await sharp(actualPath, { 
+          page: page - 1,
+          density: 72, 
+          limitInputPixels: false
+        })
+          .resize({ width: 320, height: 320, fit: 'inside', withoutEnlargement: true })
+          .toFormat('jpeg', { quality: 80 })
+          .toBuffer();
+
+        return { success: true, dataUrl: `data:image/jpeg;base64,${buffer.toString('base64')}` };
+      } catch (renderError: any) {
+         // Se falhar, tentar carregar o buffer primeiro (resolve alguns problemas de path no Windows)
+         console.warn(`[Thumbnail] Sharp direto falhou para ${path.basename(actualPath)}: ${renderError.message}. Tentando via Buffer...`);
+         const fileBuffer = fs.readFileSync(actualPath);
+         const buffer = await sharp(fileBuffer, { 
+           page: page - 1,
+           density: 36, // Ainda menor para garantir
+           limitInputPixels: false
+         })
+           .resize({ width: 320, height: 320, fit: 'inside', withoutEnlargement: true })
+           .toFormat('jpeg', { quality: 80 })
+           .toBuffer();
+           
+         return { success: true, dataUrl: `data:image/jpeg;base64,${buffer.toString('base64')}` };
+      }
+    } catch (e: any) {
+      console.warn(`[Thumbnail] Sharp falhou totalmente para PDF (${path.basename(actualPath)}, pg: ${page}): ${e.message}. Tentando NativeImage...`);
+      try {
+        const { nativeImage } = require('electron');
+        // createThumbnailFromPath costuma falhar se o path não for perfeito ou se o arquivo for muito grande
+        const thumbnail = await nativeImage.createThumbnailFromPath(actualPath, { width: 320, height: 320 });
+        const dataUrl = thumbnail.toDataURL();
+        if (dataUrl && dataUrl.length > 100) {
+           return { success: true, dataUrl };
+        }
+        throw new Error("NativeImage retornou thumbnail vazia");
+      } catch (nativeError: any) {
+        console.error(`[Thumbnail] Falha crítica no PDF ${path.basename(actualPath)}:`, nativeError.message);
+        return { success: false, error: `Falha ao gerar miniatura: ${nativeError.message}` };
+      }
+    }
+  }
+
+  // Comportamento normal para outros arquivos
   try {
     const sharp = require('sharp');
-    // Resize to reasonable thumbnail size
-    const buffer = await sharp(filePath)
+    const buffer = await sharp(actualPath, { limitInputPixels: false })
       .resize({ width: 320, height: 320, fit: 'inside' })
       .toFormat('jpeg', { quality: 80 })
       .toBuffer();
 
     const dataUrl = `data:image/jpeg;base64,${buffer.toString('base64')}`;
     return { success: true, dataUrl };
-  } catch (error) {
-    console.warn('Erro ao gerar thumbnail:', filePath, error);
-    // Return placeholder or failed status
-    return { success: false, error: error instanceof Error ? error.message : 'Falha na geração' };
+  } catch (error: any) {
+    console.warn(`[Thumbnail] Sharp falhou para ${path.basename(actualPath)}, tentando nativeImage:`, error.message);
+    try {
+      const { nativeImage } = require('electron');
+      const thumbnailSize = { width: 320, height: 320 };
+      const thumbnail = await nativeImage.createThumbnailFromPath(actualPath, thumbnailSize);
+      return { success: true, dataUrl: thumbnail.toDataURL() };
+    } catch (nativeError: any) {
+      console.error(`[Thumbnail] Falha total para ${path.basename(actualPath)}:`, nativeError.message);
+      return { success: false, error: nativeError.message };
+    }
   }
 });
 
 // Handler for full preview (TIFF/PDF support)
 ipcMain.handle('get-preview-image', async (_event, filePath: string) => {
+  let actualPath = filePath;
+  let page = 1;
+
+  if (filePath.includes('::')) {
+    const parts = filePath.split('::');
+    actualPath = parts[0];
+    page = parseInt(parts[1], 10) || 1;
+  }
+
+  const ext = path.extname(actualPath).toLowerCase();
+
+  // PDF Preview Handling
+  if (ext === '.pdf') {
+    try {
+      const sharp = require('sharp');
+      const tempDir = path.join(os.tmpdir(), 'imprime-ai-previews');
+      if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+      const crypto = require('crypto');
+      const hash = crypto.createHash('md5').update(`${actualPath}_page_${page}_v2`).digest('hex');
+      const previewPath = path.join(tempDir, `preview_${hash}.jpg`);
+
+      if (!fs.existsSync(previewPath)) {
+        console.log(`[Preview] Gerando miniatura para PDF: ${actualPath} (Pág: ${page})`);
+        
+        await sharp(actualPath, { 
+          page: page - 1, 
+          density: 300,
+          limitInputPixels: false 
+        })
+          .resize({ 
+            width: 2048, 
+            height: 2048, 
+            fit: 'inside',
+            withoutEnlargement: true 
+          })
+          .toFormat('jpeg', { quality: 85 })
+          .toFile(previewPath);
+        
+        console.log(`[Preview] Miniatura gerada com sucesso: ${previewPath}`);
+      }
+
+      return { success: true, dataUrl: `media:///${previewPath.replace(/\\/g, '/')}` };
+    } catch (e: any) {
+      console.warn(`[Preview] Sharp falhou para PDF (${actualPath}): ${e.message}. Tentando NativeImage...`);
+      try {
+        const { nativeImage } = require('electron');
+        const thumbnail = await nativeImage.createThumbnailFromPath(actualPath, { width: 1024, height: 1024 });
+        return { success: true, dataUrl: thumbnail.toDataURL() };
+      } catch (nativeError: any) {
+        console.error(`[Preview] Erro fatal no preview de PDF: ${nativeError.message}`);
+        return { success: false, error: 'Falha no preview de PDF' };
+      }
+    }
+  }
+
+  // Handling for other formats (TIFF, PSD, etc.)
   try {
     const sharp = require('sharp');
-
-    // For TIFF, PDF, etc., convert to a high-quality JPG in temp folder
-    // This avoids base64 limits and is much faster for the renderer
     const tempDir = path.join(os.tmpdir(), 'imprime-ai-previews');
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
-    // Create a unique filename based on the original file
     const crypto = require('crypto');
-    const hash = crypto.createHash('md5').update(filePath).digest('hex');
+    const hash = crypto.createHash('md5').update(`${actualPath}_v2`).digest('hex');
     const previewPath = path.join(tempDir, `preview_${hash}.jpg`);
 
-    // Only regenerate if it doesn't exist (or we could always regenerate to be sure)
-    // To ensure quality changes apply, let's always regenerate for now
-    await sharp(filePath, { limitInputPixels: false })
-      .resize({ width: 35000, height: 35000, fit: 'inside', withoutEnlargement: true })
-      .toFormat('jpeg', { quality: 100, chromaSubsampling: '4:4:4' })
-      .toFile(previewPath);
+    if (!fs.existsSync(previewPath)) {
+      console.log(`[Preview] Gerando preview para outro formato: ${actualPath}`);
+      await sharp(actualPath, { limitInputPixels: false })
+        .resize({ width: 3500, height: 3500, fit: 'inside', withoutEnlargement: true })
+        .toFormat('jpeg', { quality: 100, chromaSubsampling: '4:4:4' })
+        .toFile(previewPath);
+    }
 
-    // Return the path but formatted for our media protocol
     const mediaUrl = `media:///${previewPath.replace(/\\/g, '/')}`;
     return { success: true, dataUrl: mediaUrl };
-  } catch (error) {
-    console.error('Erro ao gerar preview:', filePath, error);
-    return { success: false, error: error instanceof Error ? error.message : 'Falha no preview' };
+  } catch (error: any) {
+    console.warn(`[Preview] Sharp falhou para ${actualPath}, tentando nativeImage:`, error.message);
+    try {
+      const { nativeImage } = require('electron');
+      const thumbnail = await nativeImage.createThumbnailFromPath(actualPath, { width: 1024, height: 1024 });
+      return { success: true, dataUrl: thumbnail.toDataURL() };
+    } catch (nativeError: any) {
+      console.error(`[Preview] Erro ao gerar preview para ${actualPath}:`, nativeError.message);
+      return { success: false, error: nativeError instanceof Error ? nativeError.message : 'Falha no preview' };
+    }
   }
 });
 
@@ -287,7 +578,16 @@ ipcMain.handle('validate-files', async (_event, files: string[], config: {
   const results = await Promise.all(
     files.map(async (file) => {
       try {
-        const validation = await validator.validate(file, config);
+        let actualPath = file;
+        let page = 1;
+
+        if (file.includes('::')) {
+          const parts = file.split('::');
+          actualPath = parts[0];
+          page = parseInt(parts[1], 10) || 1;
+        }
+
+        const validation = await validator.validate(actualPath, config, page);
         return {
           file,
           valid: validation.valid,
@@ -308,152 +608,68 @@ ipcMain.handle('validate-files', async (_event, files: string[], config: {
   return results;
 });
 
-ipcMain.handle('process-spot-white', async (_event, files: string[], outputDir: string, geminiApiKey: string, clientName?: string, mode?: 'standard' | 'economy') => {
-  // Validação obrigatória da API key
-  if (!geminiApiKey || geminiApiKey.trim() === '') {
-    return files.map(file => ({
-      file,
-      success: false,
-      outputPath: null,
-      error: 'Chave API do Google Gemini é obrigatória. Por favor, configure-a na interface.',
-    }));
+ipcMain.handle('process-spot-white', async (_event, filesWithInfo: { file: string, heightCm?: number }[], outputDir: string, geminiApiKey: string, clientName: string, mode: 'standard' | 'economy' = 'standard') => {
+  const automation = new PhotoshopAutomation();
+  let orchestrator: GeminiOrchestrator | null = null;
+
+  if (geminiApiKey && geminiApiKey.trim() !== '') {
+    try {
+      orchestrator = new GeminiOrchestrator(geminiApiKey.trim());
+    } catch (e) {
+      console.warn('[Warning] Falha ao inicializar Gemini orchestrator:', e);
+    }
   }
 
-  const automation = new PhotoshopAutomation();
-  let orchestrator: GeminiOrchestrator;
-
-  try {
-    orchestrator = new GeminiOrchestrator(geminiApiKey.trim());
-  } catch (error) {
-    return files.map(file => ({
-      file,
-      success: false,
-      outputPath: null,
-      error: `Erro ao inicializar Gemini: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
-    }));
+  // Verificar ação uma única vez no início (para ganhar performance)
+  console.log('[Info] Verificando ambiente Photoshop...');
+  const actionExists = await automation.checkActionExists();
+  if (!actionExists) {
+    console.warn('[Warning] Ação SPOTWHITE-PHOTOSHOP não detectada. Tentando processar mesmo assim...');
   }
 
   const results = [];
+  const processedRef = new Set<string>();
 
-  // Verificar se a ação existe ANTES de processar qualquer arquivo
-  let actionExists = false;
-  let actionCheckError: string | null = null;
+  for (let i = 0; i < filesWithInfo.length; i++) {
+    const item = filesWithInfo[i];
+    // Garante que o caminho do arquivo seja enviado corretamente
+    const file = typeof item === 'string' ? item : (item as any).file;
+    const heightCm = typeof item === 'object' ? (item as any).heightCm : undefined;
+    const page = typeof item === 'object' ? (item as any).page : undefined;
 
-  try {
-    console.log('[Info] Verificando se a ação do Photoshop existe...');
-    actionExists = await automation.checkActionExists();
+    if (!file || typeof file !== 'string') continue;
+    
+    // Identificador único para evitar processar o mesmo arquivo/página duas vezes no mesmo lote
+    const processKey = page ? `${file}::${page}` : file;
+    if (processedRef.has(processKey)) continue;
+    processedRef.add(processKey);
 
-    if (!actionExists) {
-      // Tentar novamente uma vez antes de falhar
-      console.log('[Info] Ação não encontrada na primeira tentativa. Tentando novamente...');
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Aguardar 1 segundo
-      actionExists = await automation.checkActionExists();
-    }
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido';
-    console.error('[Error] Erro ao verificar ação:', errorMsg);
-    actionCheckError = errorMsg;
-
-    // Se o erro for sobre Python não encontrado, retornar erro específico
-    if (errorMsg.includes('Python não encontrado') || errorMsg.includes('python') && errorMsg.includes('não encontrado')) {
-      return files.map(file => ({
-        file,
-        success: false,
-        outputPath: null,
-        error: 'Python não encontrado. Por favor, instale Python 3.x e certifique-se de que está no PATH.',
-      }));
-    }
-    // Se o erro for sobre pywin32, retornar erro específico
-    if (errorMsg.includes('pywin32') || errorMsg.includes('win32com')) {
-      return files.map(file => ({
-        file,
-        success: false,
-        outputPath: null,
-        error: 'Biblioteca pywin32 não encontrada. Execute: pip install pywin32',
-      }));
-    }
-    // Se o erro for sobre Photoshop não estar acessível
-    if (errorMsg.includes('Photoshop não está acessível') || errorMsg.includes('não está acessível')) {
-      return files.map(file => ({
-        file,
-        success: false,
-        outputPath: null,
-        error: 'Photoshop não está acessível. Certifique-se de que o Photoshop está instalado e em execução.',
-      }));
-    }
-    // Se o erro for sobre script não encontrado
-    if (errorMsg.includes('Script Python não encontrado')) {
-      return files.map(file => ({
-        file,
-        success: false,
-        outputPath: null,
-        error: `Script Python não encontrado. Verifique a instalação do aplicativo.`,
-      }));
-    }
-  }
-
-  if (!actionExists) {
-    const errorMessage = actionCheckError
-      ? `Erro ao verificar ação: ${actionCheckError}`
-      : 'Ação "SPOTWHITE-PHOTOSHOP" não encontrada na verificação inicial.';
-
-    console.warn('[Warning]', errorMessage);
-    console.log('[Info] Tentando processar mesmo assim (Forced Mode)...');
-
-    // NÃO RETORNAR MAIS ERRO AQUI. CONTINUAR PARA O LOOP DE ARQUIVOS.
-    // Isso força o sistema a tentar abrir o arquivo no Photoshop.
-  }
-
-  console.log('[Info] Iniciando processamento dos arquivos...');
-
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
     try {
-      console.log(`[Info] Processando arquivo ${i + 1}/${files.length}: ${file}`);
+      const displayPage = page ? ` (Pág ${page})` : '';
+      console.log(`[Info] Processando (${i + 1}/${filesWithInfo.length}): ${path.basename(file)}${displayPage}`);
 
-      // Orquestrar com Gemini (obrigatório)
-      try {
-        await orchestrator.orchestrateProcess(file);
-      } catch (geminiError) {
-        console.warn(`[Warning] Aviso do Gemini para ${file}:`, geminiError);
-        // Não bloquear o processo se o Gemini falhar, apenas avisar
+      if (orchestrator) {
+        try {
+          await orchestrator.orchestrateProcess(file);
+        } catch (e) { }
       }
 
-      // Processar no Photoshop (a verificação da ação já foi feita, mas será verificada novamente dentro do processSpotWhite)
-      const result = await automation.processSpotWhite(file, outputDir, geminiApiKey, clientName, mode);
-      console.log(`[Success] Arquivo processado com sucesso: ${result}`);
+      const outputPath = await automation.processSpotWhite(file, outputDir, geminiApiKey, clientName, mode, heightCm, page);
+
       results.push({
         file,
         success: true,
-        outputPath: result,
+        outputPath,
         error: null,
       });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Erro desconhecido';
-      console.error(`[Error] Erro ao processar ${file}:`, errorMsg);
-
-      // Tratamento específico de erros conhecidos
-      let finalError = errorMsg;
-
-      if (errorMsg.includes('Python não encontrado') || (errorMsg.includes('python') && errorMsg.includes('não encontrado'))) {
-        finalError = 'Python não encontrado. Por favor, instale Python 3.x e certifique-se de que está no PATH.';
-      } else if (errorMsg.includes('pywin32') || errorMsg.includes('win32com')) {
-        finalError = 'Biblioteca pywin32 não encontrada. Execute: pip install pywin32';
-      } else if (errorMsg.includes('Photoshop não está acessível') || errorMsg.includes('não está acessível')) {
-        finalError = 'Photoshop não está acessível. Certifique-se de que o Photoshop está instalado e em execução.';
-      } else if (errorMsg.includes('Script Python não encontrado')) {
-        finalError = 'Script Python não encontrado. Verifique a instalação do aplicativo.';
-      } else if (errorMsg.includes('Arquivo de entrada não encontrado')) {
-        finalError = `Arquivo não encontrado: ${file}`;
-      } else if (errorMsg.includes('não encontrada') || errorMsg.includes('not found')) {
-        finalError = `${errorMsg}\n\nDica: Verifique se:\n- O Photoshop está em execução\n- A ação "SPOTWHITE-PHOTOSHOP" existe no painel de ações\n- O nome da ação está correto (pode ter variações como "Spot White", "SPOTWHITE", etc.)`;
-      }
-
+      console.error(`[Error] Falha em ${path.basename(file)}:`, errorMsg);
       results.push({
         file,
         success: false,
         outputPath: null,
-        error: finalError,
+        error: errorMsg,
       });
     }
   }
@@ -669,6 +885,16 @@ ipcMain.handle('process-spotwhite-extracted', async () => {
     return { success: true };
   } catch (error) {
     logger.error('Erro no Spot White Extraído:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
+  }
+});
+
+ipcMain.handle('open-folder', async (_event, folderPath: string) => {
+  try {
+    await shell.openPath(folderPath);
+    return { success: true };
+  } catch (error) {
+    console.error('Erro ao abrir pasta:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Erro desconhecido' };
   }
 });

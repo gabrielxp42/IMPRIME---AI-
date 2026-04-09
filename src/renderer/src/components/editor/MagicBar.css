@@ -646,3 +646,19 @@
 .paintbrush-btn svg {
     filter: drop-shadow(0 0 8px rgba(167, 139, 250, 0.4));
 }
+
+/* Token Usage Badge */
+.token-usage-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: rgba(30, 30, 35, 0.9);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 9px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 10;
+}

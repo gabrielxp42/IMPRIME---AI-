@@ -1,16 +1,20 @@
 /* ToastNotification.css - Premium Toast Styles */
 
+/* ToastNotification.css - Premium Toast Styles */
+
 .toast-container {
     position: fixed;
-    bottom: 100px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 20px;
+    right: 20px;
+    bottom: auto;
+    left: auto;
+    transform: none;
     z-index: 99999;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
     pointer-events: none;
-    max-width: 90vw;
+    max-width: 400px;
 }
 
 .toast-container.standalone {
@@ -21,19 +25,21 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 14px 20px;
-    background: rgba(20, 20, 25, 0.95);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-radius: 14px;
+    padding: 16px 20px;
+    background: rgba(15, 23, 42, 0.65);
+    /* Liquid Glass Effect */
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow:
-        0 10px 40px rgba(0, 0, 0, 0.4),
-        0 0 0 1px rgba(255, 255, 255, 0.08),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    min-width: 280px;
-    max-width: 450px;
+        0 8px 32px -4px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    min-width: 300px;
     pointer-events: all;
-    animation: toastSlideIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    animation: toastSlideIn 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+    overflow: hidden;
+    position: relative;
 }
 
 .toast-item.exiting {
@@ -43,12 +49,12 @@
 @keyframes toastSlideIn {
     from {
         opacity: 0;
-        transform: translateY(20px) scale(0.95);
+        transform: translateX(100px) scale(0.95);
     }
 
     to {
         opacity: 1;
-        transform: translateY(0) scale(1);
+        transform: translateX(0) scale(1);
     }
 }
 

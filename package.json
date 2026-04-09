@@ -1,5 +1,5 @@
 {
-  "name": "spot-white-automation",
+  "name": "imprime-ai",
   "version": "1.0.1",
   "description": "Automação Photoshop - Spot White com interface moderna",
   "main": "dist/main.js",
@@ -16,6 +16,7 @@
     "build:python-highprecision": "pyinstaller --onefile --name background_remover_highprecision --clean src/main/modules/upscayl/scripts/background_remover_highprecision.py --distpath dist",
     "copy:python": "node scripts/copy-python-script.js",
     "preview": "vite preview",
+    "test": "vitest run --environment jsdom",
     "setup:python": "echo Por favor, instale Python 3.x e execute: pip install pywin32"
   },
   "keywords": [
@@ -26,6 +27,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@types/jsdom": "^27.0.0",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.18",
@@ -33,12 +35,15 @@
     "concurrently": "^8.2.2",
     "electron": "^28.0.0",
     "electron-builder": "^24.9.1",
+    "jsdom": "^27.4.0",
     "typescript": "^5.3.3",
     "vite": "^5.0.8",
+    "vitest": "^4.0.16",
     "wait-on": "^7.2.0"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@supabase/supabase-js": "^2.89.0",
     "@types/uuid": "^10.0.0",
     "axios": "^1.13.2",
     "font-list": "^2.0.1",

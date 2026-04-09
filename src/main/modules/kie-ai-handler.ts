@@ -340,12 +340,19 @@ export class KieAiHandler {
                         ? JSON.parse(data.resultJson)
                         : data.resultJson;
 
+                    console.log('[KieAI] resultJson parsed:', JSON.stringify(resultData).substring(0, 500));
+
                     if (resultData.resultUrls && resultData.resultUrls.length > 0) {
                         imageUrl = resultData.resultUrls[0];
+                        console.log('[KieAI] Extracted imageUrl:', imageUrl);
+                    } else {
+                        console.warn('[KieAI] No resultUrls found in resultJson');
                     }
                 } catch (e) {
                     console.error('[KieAI] Failed to parse resultJson:', e);
                 }
+            } else {
+                console.warn('[KieAI] No resultJson in response');
             }
 
             return {

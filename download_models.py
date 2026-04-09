@@ -11,7 +11,9 @@ def download_file(url, destination):
         print(f"✅ {os.path.basename(destination)} já existe.")
         return
 
-    os.makedirs(os.path.dirname(destination), exist_ok=True)
+    dirname = os.path.dirname(destination)
+    if dirname:
+        os.makedirs(dirname, exist_ok=True)
     print(f"📥 Baixando {os.path.basename(destination)}...")
     
     try:

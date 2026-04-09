@@ -4,16 +4,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   detectPhotoshop: () => ipcRenderer.invoke('detect-photoshop'),
   selectFiles: () => ipcRenderer.invoke('select-files'),
   validateFiles: (files: string[], config: any) => ipcRenderer.invoke('validate-files', files, config),
-  processSpotWhite: (files: string[], outputDir: string, geminiApiKey: string, clientName?: string, mode?: 'standard' | 'economy') =>
-    ipcRenderer.invoke('process-spot-white', files, outputDir, geminiApiKey, clientName, mode),
+  processSpotWhite: (filesWithInfo: { file: string; heightCm?: number }[], outputDir: string, geminiApiKey: string, clientName?: string, mode?: 'standard' | 'economy') =>
+    ipcRenderer.invoke('process-spot-white', filesWithInfo, outputDir, geminiApiKey, clientName, mode),
   selectOutputDirectory: () => ipcRenderer.invoke('select-output-directory'),
   checkActionExists: () => ipcRenderer.invoke('check-action-exists'),
   openFolder: (folderPath: string) => ipcRenderer.invoke('open-folder', folderPath),
   explainValidationError: (errorInfo: any, geminiApiKey: string) =>
     ipcRenderer.invoke('explain-validation-error', errorInfo, geminiApiKey),
   minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
+  openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
   maximizeWindow: () => ipcRenderer.invoke('window-maximize'),
   closeWindow: () => ipcRenderer.invoke('window-close'),
+  isMaximized: () => ipcRenderer.invoke('window-is-maximized'),
+  onMaximizeChange: (callback: (event: any, isMaximized: boolean) => void) => {
+    ipcRenderer.on('window-maximize-change', callback);
+  },
+  removeMaximizeListener: (callback: (event: any, isMaximized: boolean) => void) => {
+    ipcRenderer.removeListener('window-maximize-change', callback);
+  },
   // Funções de halftone e utilitários (OTIMIZADAS)
   processHalftone: (options: { lpi: number, type: 'RT' | 'HB' | 'NORMAL' | 'GENERIC_DARK' | 'GENERIC_LIGHT' }) =>
     ipcRenderer.invoke('process-halftone', options),
@@ -57,10 +65,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
 });
 
 export type ElectronAPI = {
+  openExternal: (url: string) => Promise<void>;
   detectPhotoshop: () => Promise<{ found: boolean; path?: string; version?: string }>;
   selectFiles: () => Promise<string[]>;
   validateFiles: (files: string[], config: any) => Promise<any[]>;
-  processSpotWhite: (files: string[], outputDir: string, geminiApiKey: string, clientName?: string, mode?: 'standard' | 'economy') => Promise<any[]>;
+  processSpotWhite: (filesWithInfo: { file: string; heightCm?: number }[], outputDir: string, geminiApiKey: string, clientName?: string, mode?: 'standard' | 'economy') => Promise<any[]>;
   selectOutputDirectory: () => Promise<string | null>;
   checkActionExists: () => Promise<boolean>;
   openFolder: (folderPath: string) => Promise<void>;
@@ -68,6 +77,9 @@ export type ElectronAPI = {
   minimizeWindow?: () => Promise<void>;
   maximizeWindow?: () => Promise<void>;
   closeWindow?: () => Promise<void>;
+  isMaximized?: () => Promise<boolean>;
+  onMaximizeChange?: (callback: (event: any, isMaximized: boolean) => void) => void;
+  removeMaximizeListener?: (callback: (event: any, isMaximized: boolean) => void) => void;
   // Funções de halftone e utilitários (OTIMIZADAS)
   processHalftone: (options: { lpi: number, type: 'RT' | 'HB' | 'NORMAL' | 'GENERIC_DARK' | 'GENERIC_LIGHT' }) => Promise<{ success: boolean; error?: string }>;
   removeColor: (color: 'black' | 'white') => Promise<{ success: boolean; error?: string }>;

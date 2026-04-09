@@ -25,6 +25,8 @@ all_good = True
 all_good &= check_package("rembg", "rembg[gpu]")
 all_good &= check_package("PIL", "Pillow")
 all_good &= check_package("numpy")
+all_good &= check_package("win32com", "pywin32")
+all_good &= check_package("onnxruntime")
 
 print("-" * 30)
 if all_good:

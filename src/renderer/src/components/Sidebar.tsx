@@ -60,35 +60,40 @@ const Sidebar: React.FC<SidebarProps> = (props) => {
           onClick={() => onViewChange('home')}
           data-tooltip="Início"
         >
-          <span className="icon">🏠</span> <span className="label">Início</span>
+          <div className="icon-container-fixed"><span className="icon">🏠</span></div>
+          {!isCollapsed && <span className="label">Início</span>}
         </button>
         <button
           className={`nav-item ${currentView === 'spotwhite' ? 'active' : ''}`}
           onClick={() => onViewChange('spotwhite')}
           data-tooltip="Spot White"
         >
-          <span className="icon">🖨️</span> <span className="label">Spot White</span>
+          <div className="icon-container-fixed"><span className="icon">🖨️</span></div>
+          {!isCollapsed && <span className="label">Spot White</span>}
         </button>
         <button
           className={`nav-item ${currentView === 'editor' ? 'active' : ''}`}
           onClick={() => onViewChange('editor')}
           data-tooltip="Editor Pro"
         >
-          <span className="icon">✏️</span> <span className="label">Editor Pro</span>
+          <div className="icon-container-fixed"><span className="icon">✏️</span></div>
+          {!isCollapsed && <span className="label">Editor Pro</span>}
         </button>
         <button
           className={`nav-item ${currentView === 'upscayl' ? 'active' : ''}`}
           onClick={() => onViewChange('upscayl')}
           data-tooltip="Upscayl AI"
         >
-          <span className="icon">🚀</span> <span className="label">Upscayl AI</span>
+          <div className="icon-container-fixed"><span className="icon">🚀</span></div>
+          {!isCollapsed && <span className="label">Upscayl AI</span>}
         </button>
         <button
           className={`nav-item ${currentView === 'mockups' ? 'active' : ''}`}
           onClick={() => onViewChange('mockups')}
           data-tooltip="Mockups"
         >
-          <span className="icon">👕</span> <span className="label">Mockups</span>
+          <div className="icon-container-fixed"><span className="icon">👕</span></div>
+          {!isCollapsed && <span className="label">Mockups</span>}
         </button>
       </div>
 
@@ -100,17 +105,19 @@ const Sidebar: React.FC<SidebarProps> = (props) => {
           onClick={() => onViewChange('profile')}
           data-tooltip="Perfil"
         >
-          <User size={18} /> <span className="label">Perfil</span>
+          <div className="icon-container-fixed"><span className="icon"><User size={20} /></span></div>
+          {!isCollapsed && <span className="label">Perfil</span>}
         </button>
         <button
           className={`nav-item ${currentView === 'settings' ? 'active' : ''}`}
           onClick={() => onViewChange('settings')}
           data-tooltip="Configurações"
         >
-          <Settings size={18} /> <span className="label">Configurações</span>
+          <div className="icon-container-fixed"><span className="icon"><Settings size={20} /></span></div>
+          {!isCollapsed && <span className="label">Configurações</span>}
         </button>
         <div className="status-indicator online">
-          <span className="dot"></span> <span className="label">Sistema Pronto</span>
+          <span className="dot"></span>{!isCollapsed && <span className="label">Sistema Pronto</span>}
         </div>
       </div>
     </div>

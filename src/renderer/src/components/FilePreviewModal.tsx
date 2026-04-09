@@ -59,11 +59,34 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ isOpen, onClose, fi
     setImageSrc(null);
     setLoadingPreview(true);
 
+    const loadHighResPreview = async (path: string) => {
+      try {
+        setLoadingPreview(true);
+        // Sempre usar o backend para arquivos que podem ser gigantes (PDF)
+        // Isso evita que o Renderer tente baixar 1GB via protocolo media://
+        const res = await window.electronAPI.getPreviewImage(path);
+        if (res.success && res.dataUrl) {
+          setImageSrc(res.dataUrl);
+        } else {
+          console.error('Failed to load preview:', res.error);
+        }
+      } catch (err) {
+        console.error("Preview load error:", err);
+      } finally {
+        setLoadingPreview(false);
+      }
+    };
+
+    if (filePath.toLowerCase().endsWith('.pdf')) {
+      loadHighResPreview(filePath);
+      return;
+    }
+
     if (isNativeImage) {
       setImageSrc(`media:///${filePath.replace(/\\/g, '/')}`);
       setLoadingPreview(false);
     } else {
-      // For TIFF, PDF, PSD, etc., request generated preview
+      // For TIFF, PSD, etc., request generated preview
       window.electronAPI.getPreviewImage(filePath)
         .then(res => {
           if (res.success && res.dataUrl) {

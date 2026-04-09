@@ -328,6 +328,8 @@
   padding: 4px 8px;
   border-radius: 6px;
   backdrop-filter: blur(4px);
+  pointer-events: none;
+  /* Não bloquear cliques */
 }
 
 .file-thumbnail {
@@ -710,12 +712,13 @@
 .file-remove-button {
   position: absolute;
   top: 8px;
-  right: 8px;
-  width: 24px;
-  height: 24px;
+  left: 8px;
+  /* Movido para a esquerda para não conflitar com o ícone de validação */
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  background: rgba(239, 68, 68, 0.8);
-  border: none;
+  background: rgba(239, 68, 68, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   color: #ffffff;
   font-size: 18px;
   font-weight: bold;
@@ -725,7 +728,7 @@
   justify-content: center;
   transition: all 0.2s;
   opacity: 0;
-  z-index: 10;
+  z-index: 100;
 }
 
 .file-card:hover .file-remove-button {

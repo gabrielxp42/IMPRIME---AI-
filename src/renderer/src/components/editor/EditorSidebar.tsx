@@ -19,10 +19,11 @@ import {
 import { ShapeType, LibraryItem } from '../../types/canvas-elements';
 import CreativePanel from './CreativePanel';
 import './EditorSidebar.css';
+import { Tool } from './Toolbar';
 
 interface EditorSidebarProps {
-    activeTool: string;
-    onToolSelect: (tool: string) => void;
+    activeTool: Tool;
+    onToolSelect: (tool: Tool) => void;
     onAddShape: (shapeType: ShapeType) => void;
     onAddText: (type?: 'heading' | 'subheading' | 'body') => void;
     onAddImage: () => void;
@@ -573,4 +574,4 @@ const EditorSidebar: React.FC<EditorSidebarProps> = ({
     );
 };
 
-export default EditorSidebar;
+export default React.memo(EditorSidebar);

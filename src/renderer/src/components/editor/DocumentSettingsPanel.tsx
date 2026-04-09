@@ -10,7 +10,7 @@ interface DocumentSettingsPanelProps {
     width: number;
     height: number;
     dpi: number;
-    backgroundColor: string;
+    backgroundColor?: string;
     onSettingsChange: (settings: { width?: number; height?: number; dpi?: number; backgroundColor?: string }) => void;
 }
 

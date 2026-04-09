@@ -59,7 +59,16 @@ interface FloatingElementBarProps {
     onTextDecorationChange?: (decoration: string) => void;
     availableFonts?: string[];
     isTransforming?: boolean;
+    lowDpiCount?: number;
+    hasTransparencyWarning?: boolean;
+    hasEmptySpaceWarning?: boolean;
+    onFixTransparency?: () => void;
+    onIgnoreTransparency?: () => void;
+    onTrimEmptySpace?: (id?: string) => void;
+
+    onIgnoreEmptySpace?: () => void;
 }
+
 
 const QUICK_COLORS = ['#3f4144', '#ef4444', '#10b981', '#3b82f6', '#8b5cf6', '#ffffff'];
 const DEFAULT_FONTS = ['Inter', 'Roboto', 'Grand Hotel', 'Oswald', 'Montserrat', 'Playfair Display', 'Arial', 'Verdana', 'Courier New'];
@@ -78,22 +87,55 @@ const FloatingElementBar: React.FC<FloatingElementBarProps> = (props) => {
         onFontSizeChange, onFontFamilyChange, onAlignChange, onCaseChange,
         onFontStyleChange, onTextDecorationChange,
         availableFonts,
-        isTransforming
+        isTransforming,
+        lowDpiCount,
+        hasTransparencyWarning,
+        hasEmptySpaceWarning,
+        onFixTransparency,
+        onIgnoreTransparency,
+        onTrimEmptySpace,
+        onIgnoreEmptySpace
     } = props;
 
-    // Posição
+
+
+    const barRef = React.useRef<HTMLDivElement>(null);
+    const [isFlipped, setIsFlipped] = useState(false);
+
+    // Posição Inteligente (Smart Flip)
+    React.useLayoutEffect(() => {
+        if (barRef.current) {
+            const rect = barRef.current.getBoundingClientRect();
+            // Se o topo da barra estiver fora da tela (negativo), flipamos para baixo
+            if (rect.top < 60) {
+                setIsFlipped(true);
+            } else {
+                setIsFlipped(false);
+            }
+        }
+    }, [elementCenterX, elementBottomY, x, y]);
+
+    // Posição baseada no estado de Flip
     const posX = elementCenterX ?? x ?? 0;
-    const posY = elementBottomY ? elementBottomY + 10 : (y ?? 0) + 50;
+    let posY = elementBottomY ? elementBottomY + 10 : (y ?? 0) + 50;
+
+    // Se estiver flipado, precisamos calcular a posição baseada no fundo do elemento
+    // Mas como não recebemos o height do transformer box diretamente como prop separada do cm,
+    // vamos aproximar ou usar uma lógica de offsets no CSS.
+    // Na verdade, podemos apenas mudar o sinal do transform no CSS.
 
     // Estado local
     const [w, setW] = useState(widthCm?.toString() || '');
     const [h, setH] = useState(heightCm?.toString() || '');
 
-    // Sincronizar valores durante transform em tempo real
+    // Sincronizar valores durante transform em tempo real (Otimizado)
     React.useEffect(() => {
         if (isTransforming) {
-            setW(widthCm?.toString() || '');
-            setH(heightCm?.toString() || '');
+            const currentW = widthCm?.toString() || '';
+            const currentH = heightCm?.toString() || '';
+            // Só atualiza se o valor realmente mudou para evitar jitter
+            setW(prev => prev !== currentW ? currentW : prev);
+            setH(prev => prev !== currentH ? currentH : prev);
         }
     }, [widthCm, heightCm, isTransforming]);
     const [locked, setLocked] = useState(true); // Aspect Ratio Lock
@@ -136,7 +178,7 @@ const FloatingElementBar: React.FC<FloatingElementBarProps> = (props) => {
         return () => clearTimeout(handler);
     }, [tempColor]);
 
-    const barRef = React.useRef<HTMLDivElement>(null);
+    // barRef já declarado acima para o LayoutEffect
 
     const applyChanges = () => {
         const numW = parseFloat(w);
@@ -163,22 +205,32 @@ const FloatingElementBar: React.FC<FloatingElementBarProps> = (props) => {
     }, [widthCm, heightCm]);
 
     const handleWidthChange = (newW: string) => {
-        setW(newW);
-        const numW = parseFloat(newW);
+        // Suporte para vírgula (Padrão Brasileiro)
+        const sanitized = newW.replace(',', '.');
+        setW(sanitized);
+
+        const numW = parseFloat(sanitized);
         if (locked && !isNaN(numW) && numW > 0) {
-            // Calcula altura proporcional
             const newH = (numW / aspectRatio.current).toFixed(2);
             setH(newH);
+            // Live Update: Aplica a mudança enquanto digita se for um número válido
+            onDimensionsChange?.(numW, parseFloat(newH));
+        } else if (!isNaN(numW) && numW > 0) {
+            onWidthChange?.(numW);
         }
     };
 
     const handleHeightChange = (newH: string) => {
-        setH(newH);
-        const numH = parseFloat(newH);
+        const sanitized = newH.replace(',', '.');
+        setH(sanitized);
+
+        const numH = parseFloat(sanitized);
         if (locked && !isNaN(numH) && numH > 0) {
-            // Calcula largura proporcional
             const newW = (numH * aspectRatio.current).toFixed(2);
             setW(newW);
+            onDimensionsChange?.(parseFloat(newW), numH);
+        } else if (!isNaN(numH) && numH > 0) {
+            onHeightChange?.(numH);
         }
     };
 
@@ -191,7 +243,7 @@ const FloatingElementBar: React.FC<FloatingElementBarProps> = (props) => {
     const handleMouseLeave = () => {
         const timer = setTimeout(() => {
             setActivePanel(null);
-        }, 300); // 300ms delay to allow bridging gap
+        }, 150); // 150ms delay: Snappier feel as requested
         setHoverTimer(timer);
     };
 
@@ -208,9 +260,43 @@ const FloatingElementBar: React.FC<FloatingElementBarProps> = (props) => {
     return (
         <div
             ref={barRef}
-            className="floating-smart-bar"
+            className={`floating-smart-bar ${(lowDpiCount && lowDpiCount > 0) || hasTransparencyWarning || hasEmptySpaceWarning ? 'warning-mode' : ''} ${isFlipped ? 'is-flipped' : ''}`}
             style={{ left: `${posX}px`, top: `${posY}px` }}
         >
+            {/* ALERTAS GLOBAIS (Exclusivo: Mostra se houver problema) */}
+            <div className="smart-alerts-container">
+                {lowDpiCount && lowDpiCount > 0 && (
+                    <div className="smart-alert warning">
+                        <span className="alert-icon">⚠️</span>
+                        <span className="alert-text">{lowDpiCount} Imagem(ns) com Baixa Resolução</span>
+                    </div>
+                )}
+
+                {hasTransparencyWarning && (
+                    <div className="smart-alert danger">
+                        <span className="alert-icon">🚫</span>
+                        <span className="alert-text">Semitransparência Detectada</span>
+                        <div className="alert-actions">
+                            <button className="alert-btn" onClick={onIgnoreTransparency}>Ignorar</button>
+                            <button className="alert-btn primary" onClick={onFixTransparency}>CORRIGIR</button>
+                        </div>
+                    </div>
+                )}
+
+                {hasEmptySpaceWarning && (
+                    <div className="smart-alert warning">
+                        <span className="alert-icon">✂️</span>
+                        <span className="alert-text">Espaço Vazio Detectado</span>
+                        <div className="alert-actions">
+                            <button className="alert-btn" onClick={onIgnoreEmptySpace}>Ignorar</button>
+                            <button className="alert-btn primary" onClick={() => onTrimEmptySpace?.()}>APARAR</button>
+
+                        </div>
+                    </div>
+                )}
+            </div>
+
+
             {/* GRUPO 1: DIMENSÕES (Compacto com Labels) */}
             <div className="smart-group dimensions">
                 <div className="compact-input-pair">

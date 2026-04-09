@@ -76,12 +76,13 @@ export class BackgroundRemovalHandler {
                     const home = process.env.USERPROFILE || '';
 
                     const commands = [
-                        'py', // Prioridade máxima no Windows (geralmente aponta para o real)
-                        // Caminhos comuns de instalação manual (instalação do winget)
-                        join(home, 'AppData', 'Local', 'Programs', 'Python', 'Python311', 'python.exe'),
+                        // Prioridade para executáveis diretos para evitar versões experimentais (python3.13t/free-threaded)
+                        join(home, 'AppData', 'Local', 'Programs', 'Python', 'Python313', 'python.exe'),
                         join(home, 'AppData', 'Local', 'Programs', 'Python', 'Python312', 'python.exe'),
+                        join(home, 'AppData', 'Local', 'Programs', 'Python', 'Python311', 'python.exe'),
                         join(home, 'AppData', 'Local', 'Programs', 'Python', 'Python310', 'python.exe'),
-                        'python',
+                        'python', // Tenta python do PATH
+                        'py',     // Launcher por último (pode pegar versão incorreta)
                         'python3',
                     ];
 

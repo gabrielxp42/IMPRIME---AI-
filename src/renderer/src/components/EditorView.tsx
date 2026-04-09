@@ -5,9 +5,9 @@
  */
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import KonvaCanvas from './editor/KonvaCanvas';
-import { LibraryItem, CanvasElement, ImageElement, DocumentSettings } from '../types/canvas-elements';
-import Toolbar from './editor/Toolbar';
+import KonvaCanvas, { KonvaCanvasHandle } from './editor/KonvaCanvas';
+import { LibraryItem, CanvasElement, ImageElement, DocumentSettings, Document } from '../types/canvas-elements';
+import Toolbar, { Tool } from './editor/Toolbar';
 import LayerPanel from './editor/LayerPanel';
 import NewDocumentModal from './editor/NewDocumentModal';
 import DocumentTabs, { OpenDocument } from './editor/DocumentTabs';
@@ -18,33 +18,24 @@ import { useToast } from './editor/ToastNotification';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import BackgroundRemovalTool from './editor/BackgroundRemovalTool';
 import AICreativePanel from './editor/AICreativePanel';
-import { trimTransparentPixels } from '../utils/imageProcessing';
+import TransparencyCorrector from './editor/TransparencyCorrector';
+import { useEditorDocuments } from '../hooks/useEditorDocuments';
+import { trimTransparentPixels, analyzeExcessSpace, addDpiToPngBuffer } from '../utils/imageProcessing';
+import { analyzeTransparency } from '../utils/transparencyAnalysis';
+import PropertiesPanel from './editor/PropertiesPanel';
+import DocumentSettingsPanel from './editor/DocumentSettingsPanel';
 import './EditorView.css';
 
-type Tool = 'select' | 'crop' | 'eraser' | 'background-removal' | 'add-image' | 'upscale';
+
 
 interface EditorViewProps {
     geminiApiKey?: string;
     kieAiApiKey?: string;
 }
 
-interface HistoryState {
-    images: CanvasElement[];
-    selectedId: string | null;
-    selectedIds?: string[];
-}
 
-interface Document {
-    id: string;
-    settings: DocumentSettings;
-    images: CanvasElement[];
-    selectedIds: string[];
-    history: HistoryState[];
-    historyIndex: number;
-    hasUnsavedChanges: boolean;
-}
 
-const MAX_HISTORY = 50;
+
 
 // --- Autosave Utility (Modern IndexedDB) ---
 const DB_NAME = 'ImprimeAI_Editor';
@@ -141,8 +132,6 @@ const loadState = async (): Promise<{ documents: Document[], activeDocumentId: s
 };
 
 const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) => {
-    const [documents, setDocuments] = useState<Document[]>([]);
-    const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
     const [isLoaded, setIsLoaded] = useState(false);
 
@@ -151,6 +140,15 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
 
     const [showBackgroundRemoval, setShowBackgroundRemoval] = useState(false);
     const [showAICreativePanel, setShowAICreativePanel] = useState(false);
+
+    // Transparency Modal State
+    const [showTransparencyModal, setShowTransparencyModal] = useState(false);
+    const [transparencyImageSrc, setTransparencyImageSrc] = useState('');
+    const [pendingTransparencyImage, setPendingTransparencyImage] = useState<{ id: string, originalImg: ImageElement } | null>(null);
+
+    // Transparency Smart Detection (Canvas)
+    const [transparencyWarning, setTransparencyWarning] = useState<{ id: string, percentage: number, thumbnail?: string } | null>(null);
+    const [emptySpaceWarning, setEmptySpaceWarning] = useState<{ id: string, percentage: number, thumbnail?: string } | null>(null);
 
     const [zoomScale, setZoomScale] = useState(1);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -163,12 +161,29 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
     const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const handleAddImageRef = useRef<((file: File, name?: string) => void) | null>(null);
+    const canvasRef = useRef<KonvaCanvasHandle>(null);
     const imageSourceCache = useRef<Map<string, string>>(new Map());
-    const isUndoRedo = useRef(false);
     const [cacheVersion, setCacheVersion] = useState(0);
-    const [currentModel, setCurrentModel] = useState('gemini-2.5-flash');
+    const [currentModel, setCurrentModel] = useState('gemini-2.5-flash-lite');
+    const [tokenUsage, setTokenUsage] = useState<{ prompt: number; completion: number; total: number } | null>(null);
 
-    const activeDocument = documents.find(d => d.id === activeDocumentId) || null;
+    const {
+        documents,
+        activeDocumentId,
+        activeDocument,
+        setDocuments,
+        selectDocument: setActiveDocumentId,
+        createDocument,
+        closeDocument,
+        updateActiveDocument,
+        saveToHistory,
+        undo,
+        redo,
+        canUndo,
+        canRedo
+    } = useEditorDocuments();
+
     const docSettings = activeDocument?.settings || null;
     const images = activeDocument?.images || [];
     const selectedIds = activeDocument?.selectedIds || [];
@@ -223,6 +238,10 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
         }) as CanvasElement[];
     }, [images, cacheVersion]);
 
+    const selectedElement = useMemo(() => {
+        return resolvedImages.find(img => img.id === selectedId) || null;
+    }, [resolvedImages, selectedId]);
+
     useEffect(() => {
         let changed = false;
         documents.forEach(doc => {
@@ -275,17 +294,20 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
 
 
     // --- DOCUMENT MANAGEMENT ---
-    const generateDocId = () => `doc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-    const updateActiveDocument = useCallback((updateFn: (doc: Document) => Document) => {
-        if (!activeDocumentId) return;
-        setDocuments(prev => prev.map(doc => doc.id === activeDocumentId ? updateFn(doc) : doc));
-    }, [activeDocumentId]);
+    // --- DOCUMENT MANAGEMENT ---
 
     const setImages = useCallback((newImages: CanvasElement[] | ((prev: CanvasElement[]) => CanvasElement[])) => {
         updateActiveDocument(doc => ({
             ...doc,
             images: typeof newImages === 'function' ? newImages(doc.images) : newImages,
+            hasUnsavedChanges: true
+        }));
+    }, [updateActiveDocument]);
+
+    const handleSettingsChange = useCallback((settings: { width?: number; height?: number; dpi?: number; backgroundColor?: string }) => {
+        updateActiveDocument(doc => ({
+            ...doc,
+            settings: { ...doc.settings, ...settings } as DocumentSettings,
             hasUnsavedChanges: true
         }));
     }, [updateActiveDocument]);
@@ -298,47 +320,25 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
         setSelectedIds(id ? [id] : []);
     }, [setSelectedIds]);
 
-    const saveToHistory = useCallback((newImages: CanvasElement[], newSelectedId: string | null, newSelectedIds?: string[]) => {
-        if (isUndoRedo.current) { isUndoRedo.current = false; return; }
-        if (!activeDocumentId) return;
 
-        // SMART SHALLOW CLONE: Significantly faster than JSON.stringify
-        // We clone the array but keep element references. Since our updates (setImages) 
-        // always create NEW objects for changed items (immutable pattern), 
-        // this is safe and 100x more memory efficient.
-        const newState: HistoryState = {
-            images: [...newImages],
-            selectedId: newSelectedId,
-            selectedIds: newSelectedIds || (newSelectedId ? [newSelectedId] : [])
-        };
-
-        setDocuments(prev => prev.map(doc => {
-            if (doc.id !== activeDocumentId) return doc;
-            const newHistory = doc.history.slice(0, doc.historyIndex + 1);
-            newHistory.push(newState);
-            if (newHistory.length > MAX_HISTORY) newHistory.shift();
-            return { ...doc, history: newHistory, historyIndex: newHistory.length - 1 };
-        }));
-    }, [activeDocumentId]);
 
     // --- STABLE PASTE HANDLER ---
-    const handleAddImageRef = useRef<any>(null);
+    // --- STABLE PASTE HANDLER ---
+    // handleAddImageRef already declared above
     const generateId = () => `el-${crypto.randomUUID().slice(0, 8)}-${Date.now().toString(36)}`;
 
     const handleAddImageFromSrc = useCallback((src: string, name: string) => {
         const img = new Image();
         img.onload = () => {
+            // Importação 1:1 (Industrial Smart Object)
+            // Removemos o limite de 800px. A imagem entra com TODOS os pixels originais.
             let w = img.width;
             let h = img.height;
-            const maxDim = 800;
-            if (w > maxDim || h > maxDim) {
-                const ratio = Math.min(maxDim / w, maxDim / h);
-                w *= ratio;
-                h *= ratio;
-            }
-            const imgId = generateId();
 
-            // OTIMIZAÇÃO: Guardar no cache e não no estado principal
+            let imgId = generateId();
+            imgId = `${imgId}-${Math.floor(Math.random() * 1000)}`;
+
+            // OTIMIZAÇÃO: Guardar no cache a versão pura e pesada
             imageSourceCache.current.set(imgId, src);
             setCacheVersion(v => v + 1);
 
@@ -346,34 +346,120 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
                 type: 'image',
                 id: imgId,
                 srcRef: imgId,
-                src: '', // Deixa vazio no estado principal
+                src: '',
+                // Centraliza no documento mantendo o tamanho real em pixels
                 x: docSettings ? (docSettings.width - w) / 2 : 0,
                 y: docSettings ? (docSettings.height - h) / 2 : 0,
                 width: w,
                 height: h,
-                rotation: 0, scaleX: 1, scaleY: 1, visible: true, locked: false,
+                rotation: 0,
+                scaleX: 1,
+                scaleY: 1,
+                visible: true,
+                locked: false,
                 name: name
             };
 
             setImages(prev => {
+                if (prev.some(p => p.id === newImg.id)) {
+                    newImg.id = `${newImg.id}-copy`;
+                    imageSourceCache.current.set(newImg.id, src);
+                    (newImg as ImageElement).srcRef = newImg.id;
+                }
                 const next = [...prev, newImg];
                 saveToHistory(next, newImg.id);
                 return next;
             });
             setSelectedId(newImg.id);
             showToast('Imagem adicionada', 'success');
+
+            // ----------------------------------------------------
+            // 2. Intelligent Check: Transparency & Empty Space
+            // ----------------------------------------------------
+            Promise.all([
+                analyzeTransparency(src),
+                analyzeExcessSpace(src)
+            ]).then(([transpAnalysis, spaceResult]) => {
+                // Check Transparency
+                if (transpAnalysis.hasIssues) {
+                    console.log(`[Smart Check] Transparency issue detected: ${transpAnalysis.issuePercentage}%`);
+                    setTransparencyWarning({ id: imgId, percentage: transpAnalysis.issuePercentage, thumbnail: src });
+                }
+
+                // Check Empty Space
+                if (spaceResult > 0) {
+                    console.log(`[Smart Check] Empty space detected: ${spaceResult}%`);
+                    setEmptySpaceWarning({ id: imgId, percentage: spaceResult, thumbnail: src });
+                }
+            });
+            // ----------------------------------------------------
+
         };
         img.src = src;
     }, [docSettings, showToast, setImages, saveToHistory]);
 
-    const handleAddImage = useCallback((file: File, customName?: string) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const src = e.target?.result as string;
-            handleAddImageFromSrc(src, customName || file.name);
-        };
-        reader.readAsDataURL(file);
-    }, [handleAddImageFromSrc]);
+    const handleAddImage = useCallback(async (file: File, customName?: string) => {
+        const fileName = customName || file.name;
+        const isPdf = file.name.toLowerCase().endsWith('.pdf');
+
+        if (isPdf) {
+            // Render PDF at 300 DPI for maximum quality
+            try {
+                showToast('Processando PDF...', 'info');
+                const pdfjsLib = await import('pdfjs-dist');
+
+                // Set worker (required for pdf.js)
+                pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+                // Process each page (for now, just first page)
+                const page = await pdf.getPage(1);
+
+                // Calculate scale for 300 DPI
+                // PDF default is 72 DPI, so scale = targetDPI / 72
+                const targetDpi = docSettings?.dpi || 300;
+                const scale = targetDpi / 72;
+
+                const viewport = page.getViewport({ scale });
+
+                // Create canvas at high resolution
+                const canvas = document.createElement('canvas');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                const ctx = canvas.getContext('2d')!;
+
+                // CRITICAL: Clear canvas to transparent (default is white)
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                await page.render({
+                    canvasContext: ctx,
+                    viewport: viewport,
+                    background: 'transparent' // Tell pdf.js not to fill background
+                }).promise;
+
+                const src = canvas.toDataURL('image/png');
+                handleAddImageFromSrc(src, fileName.replace('.pdf', '.png'));
+
+                // If multi-page, add remaining pages
+                if (pdf.numPages > 1) {
+                    showToast(`PDF tem ${pdf.numPages} páginas. Primeira página adicionada.`, 'info');
+                }
+            } catch (err) {
+                console.error('PDF render error:', err);
+                showToast('Erro ao processar PDF', 'error');
+            }
+        } else {
+            // Regular image
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const src = e.target?.result as string;
+                handleAddImageFromSrc(src, fileName);
+            };
+            reader.readAsDataURL(file);
+        }
+    }, [handleAddImageFromSrc, docSettings, showToast]);
 
     useEffect(() => { handleAddImageRef.current = handleAddImage; }, [handleAddImage]);
 
@@ -385,16 +471,182 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
         setShowBackgroundRemoval(true);
     }, [selectedId, showToast]);
 
-    const handleDeleteAction = useCallback(() => {
-        if (selectedIds.length === 0) return;
+    // Internal function for AI to use without opening modal
+    const processBackgroundRemovalInternal = async (img: ImageElement): Promise<{ success: boolean; newAttrs?: any }> => {
+        try {
+            const api = (window as any).electronAPI;
+            if (!api?.removeBackgroundBase64) return { success: false };
+
+            let src = img.src;
+            if (imageSourceCache.current.has(img.id)) src = imageSourceCache.current.get(img.id)!;
+            if (!src) return { success: false };
+
+            const base64Data = src.includes('base64,') ? src.split('base64,')[1] : src;
+            const result = await api.removeBackgroundBase64(base64Data, false);
+
+            if (result.success && result.resultBase64) {
+                let newSrc = `data:image/png;base64,${result.resultBase64}`;
+
+                // ANALISAR TRANSPARÊNCIA
+                const analysis = await analyzeTransparency(newSrc);
+                if (analysis.hasIssues) {
+                    // Trigger modal but proceed with update so user sees something
+                    setPendingTransparencyImage({ id: img.id, originalImg: img });
+                    setTransparencyImageSrc(newSrc);
+                    setShowTransparencyModal(true);
+                }
+
+                let updates: any = {};
+
+                try {
+                    const trimRes = await trimTransparentPixels(newSrc);
+                    if (trimRes) {
+                        newSrc = trimRes.src;
+                        updates.x = img.x + (trimRes.x * img.scaleX);
+                        updates.y = img.y + (trimRes.y * img.scaleY);
+                        updates.width = trimRes.width;
+                        updates.height = trimRes.height;
+                        updates.srcRef = img.id;
+                    }
+                } catch (trimErr) { console.warn("Trim failed", trimErr); }
+
+                imageSourceCache.current.set(img.id, newSrc);
+                setCacheVersion(v => v + 1);
+                // CRITICAL: Include 'src' in newAttrs so the grid uses the new image
+                updates.src = newSrc;
+
+                // Direct update to ensure UI reflects change immediately
+                setImages(prev => prev.map(p => p.id === img.id ? { ...p, ...updates } : p));
+
+                return { success: true, newAttrs: updates };
+            }
+            return { success: false };
+        } catch (e) {
+            console.error(e);
+            return { success: false };
+        }
+    };
+
+    const handleApplyTransparencyFix = useCallback(async (fixedSrc: string) => {
+        if (!pendingTransparencyImage) return;
+        const { id, originalImg } = pendingTransparencyImage;
+
+        let updates: any = {};
+        try {
+            const trimRes = await trimTransparentPixels(fixedSrc);
+            if (trimRes) {
+                fixedSrc = trimRes.src;
+                updates.x = originalImg.x + (trimRes.x * originalImg.scaleX);
+                updates.y = originalImg.y + (trimRes.y * originalImg.scaleY);
+                updates.width = trimRes.width;
+                updates.height = trimRes.height;
+            }
+        } catch (trimErr) { console.warn("Trim failed", trimErr); }
+
+        updates.srcRef = id;
+
+        // Update Cache
+        imageSourceCache.current.set(id, fixedSrc);
+        setCacheVersion(v => v + 1);
+
+        // Update Image State
+        updates.src = '';
+
+
+        setImages(prev => prev.map(img => {
+            if (img.id === id) {
+                return { ...img, ...updates };
+            }
+            return img;
+        }));
+
+        setShowTransparencyModal(false);
+        setPendingTransparencyImage(null);
+        showToast('Correção de transparência aplicada!', 'success');
+    }, [pendingTransparencyImage, setImages, showToast]);
+
+    // Helper: Create optimal grid layout FOR DTF (maximizes quantity, minimal waste)
+    const createOptimalGrid = useCallback((params: {
+        itemWidth: number;
+        itemHeight: number;
+        count: number;
+        availableWidth: number;
+        availableHeight: number;
+        gap: number;
+        marginX: number;
+        marginY: number;
+    }) => {
+        const { itemWidth, itemHeight, count, availableWidth, availableHeight, gap, marginX, marginY } = params;
+
+        // DTF priority: MAXIMIZE quantity, use ALL available space
+        // Try to fit maximum columns possible
+        const maxCols = Math.floor((availableWidth + gap) / (itemWidth + gap));
+        if (maxCols === 0) return [];
+
+        // Try +1 column with slightly reduced gap if it helps fit more
+        let optimalCols = maxCols;
+        const withExtraCol = maxCols + 1;
+        const requiredWidthExtra = withExtraCol * itemWidth + (withExtraCol - 1) * gap;
+        if (requiredWidthExtra <= availableWidth) {
+            optimalCols = withExtraCol; // Fits! Use it
+        }
+
+        const maxRows = Math.floor((availableHeight + gap) / (itemHeight + gap));
+        const maxFitCount = Math.min(count, optimalCols * maxRows);
+
+        // NO CENTERING of items individually, but CENTER THE WHOLE BLOCK to balance margins
+        const gridWidth = optimalCols * itemWidth + (optimalCols - 1) * gap;
+        const startX = marginX + Math.max(0, (availableWidth - gridWidth) / 2);
+        const startY = marginY;
+
+        const positions: { x: number, y: number }[] = [];
+
+        for (let i = 0; i < maxFitCount; i++) {
+            const col = i % optimalCols;
+            const row = Math.floor(i / optimalCols);
+
+            const x = startX + col * (itemWidth + gap);
+            const y = startY + row * (itemHeight + gap);
+
+            // Verify it actually fits (with tiny tolerance for float precision)
+            if (x + itemWidth > marginX + availableWidth + 0.5) continue;
+            if (y + itemHeight > marginY + availableHeight) break;
+
+            positions.push({ x, y });
+        }
+
+        return positions;
+    }, []);
+
+
+    const handleDeleteAction = useCallback((id?: string) => {
+        const idsToDelete = id ? [id] : selectedIds;
+        if (idsToDelete.length === 0) return;
+
+        // Smart Check: Dismiss transparency warning if we are deleting the affecting image
+        if (transparencyWarning && idsToDelete.includes(transparencyWarning.id)) {
+            setTransparencyWarning(null);
+        }
+        if (emptySpaceWarning && idsToDelete.includes(emptySpaceWarning.id)) {
+            setEmptySpaceWarning(null);
+        }
+
         setImages(prev => {
-            const next = prev.filter(img => !selectedIds.includes(img.id));
+            const next = prev.filter(img => !idsToDelete.includes(img.id));
             saveToHistory(next, null);
             return next;
         });
-        setSelectedIds([]);
+
+        // Update selection state
+        if (id) {
+            setSelectedIds(selectedIds.filter(pid => pid !== id));
+            if (selectedId === id) setSelectedId(null);
+        } else {
+            setSelectedIds([]);
+        }
+
         showToast('Elemento(s) removido(s)', 'info');
-    }, [selectedIds, setImages, saveToHistory, setSelectedIds, showToast]);
+    }, [selectedIds, selectedId, setImages, saveToHistory, setSelectedIds, showToast, transparencyWarning, emptySpaceWarning]);
 
     const handleDuplicateAction = useCallback((options?: { x?: number, y?: number, sourceIds?: string[], leaderId?: string, isAltDrag?: boolean, targetPositions?: { id: string, x: number, y: number }[] }) => {
         const idsToDuplicate = options?.sourceIds || selectedIds;
@@ -480,18 +732,32 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
         });
     }, [selectedIds, selectedId, setImages, saveToHistory, setSelectedIds, setSelectedId, showToast]);
 
-    const handleTrimAction = useCallback(async () => {
-        if (!selectedId) return;
-        const imgElement = resolvedImages.find(i => i.id === selectedId);
+    const handleTrimAction = useCallback(async (id?: string) => {
+        const targetId = id || selectedId;
+        if (!targetId) return;
+        const imgElement = resolvedImages.find(i => i.id === targetId);
         if (!imgElement || imgElement.type !== 'image') return;
 
         const image = imgElement as ImageElement;
         try {
-            const result = await trimTransparentPixels(image.src);
+            // Smart Object Check: Use cache if src is empty
+            const sourceBase64 = image.src || imageSourceCache.current.get(image.srcRef || image.id);
+            if (!sourceBase64) return;
+
+            const result = await trimTransparentPixels(sourceBase64);
             if (result) {
+                // Clear warning if trim successful
+                if (emptySpaceWarning && emptySpaceWarning.id === targetId) {
+                    setEmptySpaceWarning(null);
+                }
+
+                // OTIMIZAÇÃO: Cache do novo resultado
+                imageSourceCache.current.set(image.srcRef || image.id, result.src);
+                setCacheVersion(v => v + 1);
+
                 setImages(prev => {
                     const next = prev.map(img => {
-                        if (img.id === selectedId) {
+                        if (img.id === targetId) {
                             const i = img as ImageElement;
                             // Ajustar posição baseada no corte e escala atual
                             const newX = i.x + (result.x * i.scaleX);
@@ -499,7 +765,7 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
 
                             return {
                                 ...i,
-                                src: result.src,
+                                src: '', // Mantém leve
                                 x: newX,
                                 y: newY,
                                 width: result.width,
@@ -508,7 +774,7 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
                         }
                         return img;
                     });
-                    saveToHistory(next, selectedId);
+                    saveToHistory(next, targetId);
                     return next;
                 });
                 showToast('Espaço vazio removido', 'success');
@@ -519,7 +785,8 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
             console.error('Erro no trim:', error);
             showToast('Erro ao aparar imagem', 'error');
         }
-    }, [selectedId, resolvedImages, setImages, saveToHistory, showToast]);
+    }, [selectedId, resolvedImages, setImages, saveToHistory, showToast, emptySpaceWarning]);
+
 
     const handleAlign = useCallback((type: 'left' | 'right' | 'top' | 'bottom' | 'center-h' | 'center-v') => {
         if (selectedIds.length < 2) return;
@@ -637,6 +904,8 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
         });
     }, [selectedId, setImages, saveToHistory]);
 
+
+
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
             const target = e.target as HTMLElement;
@@ -696,22 +965,63 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
         }));
     }, [setImages]);
 
+    const handleToolSelect = useCallback((t: Tool) => {
+        if (t === 'background-removal') {
+            if (!selectedId) {
+                showToast('Selecione uma imagem primeiro', 'info');
+                return;
+            }
+            setShowBackgroundRemoval(true);
+        } else if (t === 'upscale') {
+            if (!selectedId) {
+                showToast('Selecione uma imagem primeiro', 'info');
+                return;
+            }
+            showToast('Upscale em breve...', 'info');
+        } else {
+            setActiveTool(t);
+        }
+    }, [selectedId, showToast]);
+
+    const handleNewDocumentClick = useCallback(() => setShowNewDocModal(true), []);
+
+    const handleVisibilityToggle = useCallback((id: string) => {
+        setImages(prev => {
+            const img = prev.find(i => i.id === id);
+            if (img) return prev.map(i => i.id === id ? { ...i, visible: !i.visible } : i);
+            return prev;
+        });
+    }, [setImages]);
+
+    const handleLockToggle = useCallback((id: string) => {
+        setImages(prev => {
+            const img = prev.find(i => i.id === id);
+            if (img) return prev.map(i => i.id === id ? { ...i, locked: !i.locked } : i);
+            return prev;
+        });
+    }, [setImages]);
+
+    const handleRename = useCallback((id: string, newName: string) => {
+        handleUpdateMany([{ id, attrs: { name: newName } }]);
+    }, [handleUpdateMany]);
+
+    const handleTransform = useCallback((id: string, attrs: any) => {
+        handleUpdateMany([{ id, attrs }]);
+    }, [handleUpdateMany]);
+
+    const handleCanvasDrop = useCallback((e: any) => {
+        e.preventDefault();
+        e.stopPropagation(); // CRITICAL: Stop bubbling to parent div which also has onDrop
+        const files = Array.from(e.dataTransfer.files) as File[];
+        files.forEach(f => {
+            if (handleAddImageRef.current) handleAddImageRef.current(f);
+        });
+    }, []);
+
 
 
     const handleCreateDocument = useCallback((settings: DocumentSettings) => {
-        const newDoc: Document = {
-            id: generateDocId(),
-            settings,
-            images: [],
-            selectedIds: [],
-            history: [],
-            historyIndex: -1,
-            hasUnsavedChanges: false
-        };
-
-        // Reset state BEFORE switching
-        setDocuments(prev => [...prev, newDoc]);
-        setActiveDocumentId(newDoc.id);
+        createDocument(settings);
         setShowNewDocModal(false);
 
         // Force reset zoom & fit screen after a short delay to allow layout to settle
@@ -736,400 +1046,456 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
         });
 
         showToast(`Documento criado: ${settings.width}x${settings.height}px`, 'success');
-    }, [showToast]);
+    }, [createDocument, showToast]);
 
-    const handleUndo = () => {
-        if (!activeDocument || activeDocument.historyIndex <= 0) return;
-        isUndoRedo.current = true;
-        const prev = activeDocument.history[activeDocument.historyIndex - 1];
-        updateActiveDocument(doc => ({
-            ...doc, images: prev.images, selectedIds: prev.selectedIds || [], historyIndex: doc.historyIndex - 1
-        }));
-        showToast('Desfeito', 'info');
-    };
+    const handleUndo = useCallback(() => {
+        if (canUndo) {
+            undo();
+            showToast('Desfeito', 'info');
+        }
+    }, [canUndo, undo, showToast]);
 
-    const handleRedo = () => {
-        if (!activeDocument || activeDocument.historyIndex >= activeDocument.history.length - 1) return;
-        isUndoRedo.current = true;
-        const next = activeDocument.history[activeDocument.historyIndex + 1];
-        updateActiveDocument(doc => ({
-            ...doc, images: next.images, selectedIds: next.selectedIds || [], historyIndex: doc.historyIndex + 1
-        }));
-        showToast('Refeito', 'info');
-    };
+    const handleRedo = useCallback(() => {
+        if (canRedo) {
+            redo();
+            showToast('Refeito', 'info');
+        }
+    }, [canRedo, redo, showToast]);
 
     const [aiHistory, setAiHistory] = useState<{ role: 'user' | 'model', text: string }[]>([]);
 
     const handleAICommand = async (command: string): Promise<string> => {
+        // Build-in helper for unique IDs
+        const generateId = () => 'ai-' + Math.random().toString(36).substr(2, 9);
+
         if (!geminiApiKey || !docSettings) return 'Configuração incompleta';
         setAiThinking(true);
+
         try {
             const genAI = new GoogleGenerativeAI(geminiApiKey);
-            // Usar o modelo selecionado pelo usuário
             let model = genAI.getGenerativeModel({ model: currentModel });
-            const selImage = resolvedImages.find(i => i.id === selectedId);
 
-            // Contexto rico para a IA entender o canvas com unidades reais
-            const dpi = docSettings.dpi || 300; // Default to 300 if missing
+            const dpi = docSettings.dpi || 300;
             const pxToCm = (px: number) => (px / dpi) * 2.54;
             const cmToPx = (cm: number) => (cm / 2.54) * dpi;
 
-            const context = {
-                doc: {
-                    widthPx: docSettings.width,
-                    heightPx: docSettings.height,
-                    widthCm: pxToCm(docSettings.width).toFixed(2),
-                    heightCm: pxToCm(docSettings.height).toFixed(2),
-                    dpi: dpi
-                },
-                selection: selImage ? {
-                    x: selImage.x, y: selImage.y,
-                    widthPx: (selImage as any).width * selImage.scaleX,
-                    heightPx: (selImage as any).height * selImage.scaleY,
-                    widthCm: pxToCm((selImage as any).width * selImage.scaleX).toFixed(2),
-                    heightCm: pxToCm((selImage as any).height * selImage.scaleY).toFixed(2),
-                    type: selImage.type,
-                    name: selImage.name
-                } : null,
-                totalElements: images.length
+            // VISION: Provide full board state to AI
+            // VISION: Detecção de baixa resolução (Imagens esticadas além do original)
+            const lowDpiItems = resolvedImages
+                .filter(i => i.type === 'image' && (i.scaleX > 1.05 || i.scaleY > 1.05))
+                .map(i => i.name || i.id);
+
+            // OPTIMIZATION: Lite Context for heavy scenes (> 50 items) to prevent API Token exhaustion
+            // If we have many items, we don't need to send exact X/Y for every single one unless explicitly asked.
+            const isLiteContext = resolvedImages.length > 50;
+            const mappedImages = resolvedImages.map(i => {
+                const w = 'width' in i ? (i as any).width : 0;
+                const h = 'height' in i ? (i as any).height : 0;
+
+                // Base info always needed
+                const baseInfo = {
+                    id: i.id,
+                    type: i.type,
+                    name: i.name,
+                    visible: i.visible,
+                    locked: i.locked,
+                    isLowResolution: lowDpiItems.includes(i.name || i.id)
+                };
+
+                // Full context only if few items
+                if (!isLiteContext) {
+                    return {
+                        ...baseInfo,
+                        x: Math.round(i.x),
+                        y: Math.round(i.y),
+                        width: Math.round(w),
+                        height: Math.round(h),
+                        widthCm: parseFloat(pxToCm(w * i.scaleX).toFixed(2)),
+                        scale: { x: i.scaleX, y: i.scaleY },
+                    };
+                }
+                // Lite context
+                return baseInfo;
+            });
+
+            const contextData = {
+                document: { ...docSettings, dpi: docSettings.dpi || 300 },
+                selection: selectedIds,
+                images: mappedImages,
+                lowResolutionCount: lowDpiItems.length,
+                lowResolutionItems: lowDpiItems,
+                layoutWaste: resolvedImages.length === 0 ? 'empty' : resolvedImages.length < 3 ? 'low-density' : 'optimizable',
+                contextMode: isLiteContext ? 'LITE (Coordinates omitted for performance)' : 'FULL'
             };
 
-            const systemPrompt = `
-                You are an expert AI Design Assistant capable of precise layout calculations.
-                
-                CURRENT CONTEXT (Physical & Digital):
-                - Document: ${context.doc.widthPx}x${context.doc.heightPx} px (${context.doc.widthCm}x${context.doc.heightCm} cm) @ ${context.doc.dpi} DPI.
-                - Selected Item: ${context.selection ? JSON.stringify(context.selection) : 'None'}.
-                - 1 cm = ${Math.round(cmToPx(1))} pixels.
+            // CONTEXT: Limited History (Last 2 turns) for situational awareness without token bloat
+            const recentHistory = aiHistory.slice(-2).map(h =>
+                `${h.role === 'user' ? 'USER' : 'AI'}: ${h.text}`
+            ).join('\n');
 
-                USER COMMAND: "${command}"
+            const systemPrompt = `You are an expert DTF Design Assistant.
+CURRENT STATE: ${JSON.stringify(contextData)}
+RECENT HISTORY:
+${recentHistory}
+USER COMMAND: "${command}"
 
-                INSTRUCTIONS:
-                - If the user specifies physical units (cm, mm, m), CONVERT them to pixels using the provided DPI reference before responding.
-                - "Half a meter" = 50 cm. "10 cm" = ${(10 / 2.54 * dpi).toFixed(0)} px.
+CRITICAL RULES:
+1. AGENCY: You are an intelligent agent. ONLY perform actions (resize, remove_bg, etc.) if the user EXPLICITLY asks or if it is heavily implied (e.g. "prepare this").
+2. CONVERSATION: If the user says "Hi", "Hello", asks a question, or chats, return "actions": [] (EMPTY ARRAY). Do NOT invent actions.
+{
+  "reasoning": "Internal logic in PORTUGUESE explaining the choice.",
+  "confidence": number (0.0 to 1.0),
+  "actions": [{"action": "remove_background" | "resize" | "smart_grid" | "duplicate" | "delete_selected" | "delete_others" | "delete_all" | "align" | "arrange" | "rotate" | "upscale" | "move" | "opacity" | "visibility" | "lock" | "canvas_background", ...}],
+  "message": "Friendly confirmation in PORTUGUESE"
+}
 
-                INSTRUCTIONS:
-                1. **ROLE:** You are an Expert DTF (Direct to Film) Printing Assistant. Your CORE directive is MATERIAL EFFICIENCY.
-                2. **MANDATORY STRATEGY (Native Optimization):** 
-                   - **Always optimize space.** Never leave unnecessary gaps. 
-                   - **Always start at Top-Left (0,0).**
-                   - **Always use 'smart_grid'** for layouts to ensure consistent packing.
-                   - Default to "fill_area" or "fill_page" logic if count is not specified.
+ACTION SPECS & SEMANTIC RULES:
+1. "remove_background": {} -> ONLY if user says "fundo", "background", "recortar", "transparente".
+2. "smart_grid": {"items": [{"count": "fill"}], "limitHeightCm"?: number}
+   - If user says "meio metro", "50cm", "half meter", use {"limitHeightCm": 50}.
+   - If user says "um metro", "100cm", use {"limitHeightCm": 100}.
+3. "resize": {"widthCm": number}.
+4. "align": {"type": "left" | "right" | "top" | "bottom" | "center-h" | "center-v"}.
+5. "arrange": {"order": "front" | "back"}.
+6. "rotate": {"angle": number}.
+7. "move": {"x"?: number, "y"?: number, "position"?: "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right"}.
+8. "opacity": {"value": number (0 to 1)}.
+9. "visibility": {"visible": boolean}.
+10. "lock": {"locked": boolean}.
+11. "canvas_background": {"color": string}.
+12. DELETE ACTIONS: "Apagar", "Excluir", "Limpar" = DELETE.
+13. MULTI-STEP: If user says "remove fundo e coloca 5cm em meio metro", the actions are [remove_background, resize(5), smart_grid(limitHeight: 50)].
+14. CONFIDENCE: If the user asks something you can't do, set confidence < 0.4.
+15. If NO item is selected but user asks to act on "logo", pick the most relevant one.`;
 
-                3. **THINKING PROCESS (Must be first):**
-                   - Analyze measurements.
-                   - Plan the most compact flow possible.
-                   - "User asked for grid? I will pack them tightly starting 0,0."
-
-                4. **OUTPUT JSON:**
-                   Use "smart_grid" for EVERYTHING involving layout/copies.
-
-                AVAILABLE ACTIONS (JSON):
-                1. "smart_grid": 
-                   Format: { 
-                     "action": "smart_grid", 
-                     "items": [ 
-                        { "type": "selection", "count": number | "fill", "widthCm": number (optional) }
-                     ],
-                     "limitHeightCm": number (optional)
-                   }
-                
-                2. "resize": Simple single resize. { "action": "resize", "widthCm": number }
-                3. "remove_background": { "action": "remove_background" }
-
-                EXAMPLES:
-                - User: "Preciso de meio metro dessa logo" -> 
-                  THOUGHT: User wants to fill 50cm linear height. No specific count, so strategy is fill_area.
-                  JSON: [{"action": "smart_grid", "items": [{"type": "selection", "count": "fill"}], "limitHeightCm": 50}]
-                
-                - User: "10 dessa com 5cm e 15 com 15cm" ->
-                  THOUGHT: Mixed batch. 10 copies @ 5cm, 15 copies @ 15cm.
-                  JSON: [{"action": "smart_grid", "items": [{"type": "selection", "count": 10, "widthCm": 5}, {"type": "selection", "count": 15, "widthCm": 15}]}]
-            `;
-
-            const result = await model.generateContent(systemPrompt);
+            const result = await model.generateContent({
+                contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
+                generationConfig: {
+                    maxOutputTokens: 1000,
+                    temperature: 0.7
+                }
+            });
             const responseText = result.response.text();
 
-            console.log("AI Context:", context);
-            console.log("AI Raw Response:", responseText);
-
-            // Extrair JSON robustamente
-            // Procura pelo bloco JSON: ou após a tag "JSON:" ou apenas o array.
-            let jsonString = null;
-            const jsonBlockMatch = responseText.match(/JSON:\s*(\[[\s\S]*\])/i);
-            if (jsonBlockMatch) {
-                jsonString = jsonBlockMatch[1];
-            } else {
-                const directMatch = responseText.match(/\[[\s\S]*\]/);
-                if (directMatch) jsonString = directMatch[0];
+            // Track Usage
+            if (result.response.usageMetadata) {
+                setTokenUsage({
+                    prompt: result.response.usageMetadata.promptTokenCount,
+                    completion: result.response.usageMetadata.candidatesTokenCount,
+                    total: result.response.usageMetadata.totalTokenCount
+                });
             }
 
-            let finalResp = responseText;
-            // Se tiver pensamento, limpar da resposta final para o usuário não ver o "cérebro" exposto (opcional)
-            // Se for conversa, mantemos tudo ou limpamos o "THOUGHT:"? 
-            // Melhor: Se não for JSON (conversa), mostramos o texto limpo.
+            let aiData: { actions: any[], message?: string, reasoning?: string, confidence?: number } = { actions: [] };
+            try {
+                const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+                if (jsonMatch) aiData = JSON.parse(jsonMatch[0]);
+            } catch (e) {
+                console.error("Parse error", e);
+            }
 
-            if (jsonString) {
-                try {
-                    let actions = JSON.parse(jsonString);
-                    if (!Array.isArray(actions)) actions = [actions];
+            console.log("AI REASONING:", aiData.reasoning);
+            console.log("AI CONFIDENCE:", aiData.confidence);
 
-                    if (actions.length > 0) {
-                        // Extrair o "Thought" para mostrar como feedback sutil ou log
-                        const thoughtMatch = responseText.match(/THOUGHT:\s*([\s\S]*?)(?=JSON:|$)/i);
-                        const thought = thoughtMatch ? thoughtMatch[1].trim() : "Processando...";
-                        showToast(`IA: ${thought.substring(0, 50)}...`, 'info'); // Mostra pedaço do pensamento
+            const actions = aiData.actions || [];
+            let humanMessage = aiData.message || "Processando...";
 
-                        finalResp = "Ações executadas.";
+            // Guardrail: Skip actions if confidence is too low
+            if (aiData.confidence !== undefined && aiData.confidence < 0.4 && actions.length > 0) {
+                console.warn("AI Confidence too low, aborting actions.");
+                actions.length = 0; // Clear actions
+                humanMessage = "Não tenho certeza se entendi tudo. Pode detalhar melhor? (Ex: 'apagar a imagem' ou 'remover o fundo'?)";
+            }
+
+            if (actions.length > 0) {
+                actions.sort((a) => (a.action === 'remove_background' ? -1 : 1));
+
+                // BATCH PROCESSING: modifying a local copy to ensure sequential logic works (A -> B -> C)
+                // This fixes "stale state" where grid doesn't see bg removal, or original is left behind.
+                let currentImages = [...resolvedImages];
+                let currentSelection = [...selectedIds];
+
+                for (const act of actions) {
+                    // Always find the most up-to-date version of the target in our working set
+                    // Fallback to selection or first image if specific target lost
+                    let curIdx = -1;
+                    if (currentSelection.length > 0) {
+                        curIdx = currentImages.findIndex(i => i.id === currentSelection[0]);
+                    }
+                    if (curIdx === -1 && currentImages.length > 0) {
+                        curIdx = currentImages.findIndex(i => i.type === 'image'); // Find first image
                     }
 
-                    for (const act of actions) {
-                        console.log('[AI Agent] Executing:', act);
-                        // ... (Action handlers logic remains largely the same, just appending to finalResp)
+                    if (curIdx === -1) continue; // Nothing to act on
+                    // CRITICAL FIX: cur must be updated after every change
+                    let cur = currentImages[curIdx];
 
-                        if (act.action === 'smart_grid' && selImage) {
-                            // DTF Standard: 1cm safety margin
-                            const margin = cmToPx(1);
-                            const gap = cmToPx(0.5); // 0.5cm gap
-
-                            let currentX = margin;
-                            let currentY = margin;
-                            let rowMaxH = 0;
-                            const newImages: ImageElement[] = [];
-
-                            // Process items batch by batch
-                            const batches = act.items || [{ type: 'selection', count: 'fill' }];
-                            let globalCreateLimit = 1000;
-
-                            // Preparation: If we are effectively replacing the canvas content with a layout,
-                            // we might want to "consume" the selected image into the grid.
-                            // Strategy: The first item of the grid BECOMES the selected image (moved), 
-                            // subsequent items are clones.
-
-                            let isOriginalUsed = false;
-
-                            for (const batch of batches) {
-                                let count = batch.count;
-                                const widthCm = batch.widthCm;
-
-                                // Calculate dimensions for this batch
-                                let batchW = (selImage as any).width * selImage.scaleX;
-                                let batchH = (selImage as any).height * selImage.scaleY;
-                                let scaleX = selImage.scaleX;
-                                let scaleY = selImage.scaleY;
-
-                                if (widthCm) {
-                                    const targetPx = cmToPx(widthCm);
-                                    const currentPx = (selImage as any).width; // Base width
-                                    const factor = targetPx / currentPx;
-                                    scaleX = factor;
-                                    scaleY = factor;
-                                    batchW = targetPx;
-                                    batchH = (selImage as any).height * factor;
-                                }
-
-                                // Determine count for "fill"
-                                if (count === 'fill') {
-                                    // Calculate how many fit in the requested area
-                                    const availableW = docSettings.width - (margin * 2);
-                                    let availableH = docSettings.height - (margin * 2);
-                                    if (act.limitHeightCm) availableH = cmToPx(act.limitHeightCm);
-
-                                    const cols = Math.floor(availableW / (batchW + gap));
-                                    const rows = Math.floor(availableH / (batchH + gap));
-                                    count = cols * rows;
-                                }
-
-                                // Generation Loop
-                                for (let i = 0; i < count; i++) {
-                                    if (newImages.length >= globalCreateLimit) break;
-
-                                    // Line Wrapping (Shelf flow)
-                                    if (currentX + batchW > docSettings.width - margin) {
-                                        currentX = margin;
-                                        currentY += rowMaxH + gap;
-                                        rowMaxH = 0;
-                                    }
-
-                                    // Check Height Limit (if linear meter limit)
-                                    if (act.limitHeightCm) {
-                                        if (currentY + batchH > cmToPx(act.limitHeightCm) + margin) break;
-                                    }
-
-                                    // Create Item
-                                    if (!isOriginalUsed) {
-                                        // Move Original to first slot
-                                        handleUpdateMany([{
-                                            id: selImage.id,
-                                            attrs: { x: currentX, y: currentY, scaleX, scaleY }
-                                        }]);
-                                        isOriginalUsed = true;
-                                        // We don't add to newImages array because it's already in 'images' state
-                                        // But we need to update our flow trackers
-                                    } else {
-                                        // Create Clone
-                                        newImages.push({
-                                            ...(selImage as ImageElement),
-                                            id: generateId(),
-                                            x: currentX,
-                                            y: currentY,
-                                            scaleX: scaleX,
-                                            scaleY: scaleY,
-                                            name: `${selImage.name}-copy-${newImages.length}`,
-                                            srcRef: (selImage as ImageElement).srcRef || selImage.id
-                                        });
-                                    }
-
-                                    // Update Flow Trackers
-                                    rowMaxH = Math.max(rowMaxH, batchH);
-                                    currentX += batchW + gap;
-                                }
+                    if (act.action === 'remove_background') {
+                        if (cur.type === 'image') {
+                            showToast('Removendo fundo...', 'info');
+                            // We must await the actual API call
+                            const res = await processBackgroundRemovalInternal(cur as ImageElement);
+                            if (res.success && res.newAttrs) {
+                                // Apply update to our local working copy immediately
+                                currentImages[curIdx] = { ...cur, ...res.newAttrs };
+                                cur = currentImages[curIdx]; // REFRESH REFERENCE
                             }
-
-                            if (newImages.length > 0) {
-                                setImages(prev => [...prev, ...newImages]);
-                                saveToHistory([...images, ...newImages], null); // Note: images includes original (now moved)
-                                finalResp += `Smart Layout criado: ${newImages.length + 1} itens organizados. `;
-                            } else if (isOriginalUsed) {
-                                finalResp += `Item redimensionado e posicionado. `;
-                            }
-                        }
-
-                        if (act.action === 'grid' && selImage) {
-                            // (Recuperando lógica original de grid aqui para garantir integridade)
-                            const gap = act.gap || 10;
-                            const margin = act.margin || 20;
-                            const w = (selImage as any).width * selImage.scaleX;
-                            const h = (selImage as any).height * selImage.scaleY;
-
-                            // Lógica inteligente para "Meio Metro" (fill_area)
-                            let availableH = docSettings.height - (margin * 2);
-                            if (act.strategy === 'fill_area' && act.limitCm) {
-                                availableH = cmToPx(act.limitCm); // Limita a altura do grid
-                            }
-                            const availableW = docSettings.width - (margin * 2);
-
-                            let cols = Math.floor(availableW / (w + gap));
-                            let rows = Math.floor(availableH / (h + gap));
-
-                            if (act.strategy === 'fixed_count' && act.count) {
-                                const side = Math.ceil(Math.sqrt(act.count));
-                                cols = side;
-                                rows = Math.ceil(act.count / side);
-                            }
-                            cols = Math.min(cols, 20);
-                            rows = Math.min(rows, 20);
-                            const copies: ImageElement[] = [];
-                            let created = 0;
-                            const totalTarget = act.strategy === 'fixed_count' ? act.count : (cols * rows);
-                            const gridW = (cols * w) + ((cols - 1) * gap);
-                            const gridH = (rows * h) + ((rows - 1) * gap);
-                            const startX = (docSettings.width - gridW) / 2;
-                            const startY = (docSettings.height - gridH) / 2;
-
-                            for (let r = 0; r < rows; r++) {
-                                for (let c = 0; c < cols; c++) {
-                                    if (created >= totalTarget) break;
-                                    copies.push({
-                                        ...(selImage as ImageElement),
-                                        id: generateId(),
-                                        x: startX + (c * (w + gap)),
-                                        y: startY + (r * (h + gap)),
-                                        name: `${selImage.name}-copy-${created}`,
-                                        srcRef: (selImage as ImageElement).srcRef || selImage.id
-                                    });
-                                    created++;
-                                }
-                            }
-                            setImages(prev => [...prev, ...copies]);
-                            saveToHistory([...images, ...copies], null);
-                            finalResp += `Grid (${created} itens). `;
-                        }
-
-                        if (act.action === 'duplicate' && selImage) {
-                            const count = act.count || 1;
-                            for (let k = 0; k < count; k++) handleDuplicateAction();
-                            finalResp += `Duplicado x${count}. `;
-                        }
-
-                        if (act.action === 'center' && selImage) {
-                            const w = (selImage as any).width * selImage.scaleX;
-                            const h = (selImage as any).height * selImage.scaleY;
-                            const newX = (docSettings.width - w) / 2;
-                            const newY = (docSettings.height - h) / 2;
-                            handleUpdateMany([{ id: selImage.id, attrs: { x: newX, y: newY } }]);
-                            finalResp += "Centralizado. ";
-                        }
-
-                        if (act.action === 'remove_background' && selImage) {
-                            handleRemoveBackgroundAction();
-                            finalResp += "Removendo fundo... ";
-                        }
-
-                        if (act.action === 'move' && selImage) {
-                            const w = (selImage as any).width * selImage.scaleX;
-                            const h = (selImage as any).height * selImage.scaleY;
-                            let nx = selImage.x;
-                            let ny = selImage.y;
-                            const pad = 20;
-                            if (act.position.includes('top')) ny = pad;
-                            if (act.position.includes('bottom')) ny = docSettings.height - h - pad;
-                            if (act.position.includes('left')) nx = pad;
-                            if (act.position.includes('right')) nx = docSettings.width - w - pad;
-                            if (act.position === 'center') {
-                                nx = (docSettings.width - w) / 2;
-                                ny = (docSettings.height - h) / 2;
-                            }
-                            handleUpdateMany([{ id: selImage.id, attrs: { x: nx, y: ny } }]);
-                            finalResp += `Movido para ${act.position}. `;
-                        }
-
-                        if (act.action === 'resize' && selImage) {
-                            let newScaleX = selImage.scaleX;
-                            let newScaleY = selImage.scaleY;
-
-                            if (act.widthCm) {
-                                const targetPx = cmToPx(act.widthCm);
-                                const currentPx = (selImage as any).width; // Base width
-                                const factor = targetPx / currentPx;
-                                newScaleX = factor;
-                                newScaleY = factor; // Maintain aspect ratio
-                            } else if (act.heightCm) {
-                                const targetPx = cmToPx(act.heightCm);
-                                const currentPx = (selImage as any).height;
-                                const factor = targetPx / currentPx;
-                                newScaleX = factor;
-                                newScaleY = factor;
-                            } else if (act.factor) {
-                                newScaleX *= act.factor;
-                                newScaleY *= act.factor;
-                            } else if (act.targetWidth && act.targetHeight) {
-                                newScaleX = act.targetWidth / (selImage as any).width;
-                                newScaleY = act.targetHeight / (selImage as any).height;
-                            }
-
-                            handleUpdateMany([{ id: selImage.id, attrs: { scaleX: newScaleX, scaleY: newScaleY } }]);
-                            finalResp += `Redimensionado para ${act.widthCm ? act.widthCm + 'cm' : 'novas medidas'}. `;
                         }
                     }
-                } catch (e) {
-                    console.warn("AI returned JSON but parsing failed, falling back to text", e);
-                    finalResp = responseText;
+
+                    if (act.action === 'resize' && act.widthCm) {
+                        const tPx = cmToPx(act.widthCm);
+                        const factor = tPx / (cur as any).width; // Use intrinsic width
+                        currentImages[curIdx] = { ...cur, scaleX: factor, scaleY: factor };
+                        cur = currentImages[curIdx]; // REFRESH REFERENCE
+                    }
+
+                    if (act.action === 'smart_grid') {
+                        // DTF-OPTIMIZED: Minimal spacing to maximize quantity
+                        // 1mm margin from edge, 1mm gap between items (just enough for cutting)
+                        const margin = cmToPx(0.1); // 1mm
+                        const gap = cmToPx(0.1);    // 1mm
+
+                        const batch = act.items?.[0] || { count: 'fill' };
+                        let count = batch.count;
+                        const availW = docSettings.width - margin * 2;
+                        let availH = act.limitHeightCm ? cmToPx(act.limitHeightCm) : docSettings.height - margin * 2;
+
+                        // Use CURRENT dimensions from our working copy (potentially resized/cropped)
+                        const w = (cur as any).width || 100;
+                        const h = (cur as any).height || 100;
+                        const scaleX = currentImages[curIdx].scaleX || 1;
+                        const scaleY = currentImages[curIdx].scaleY || 1;
+                        const itemW = w * scaleX;
+                        const itemH = h * scaleY;
+
+                        if (count === 'fill') {
+                            const cols = Math.floor((availW + gap) / (itemW + gap));
+                            const rows = Math.floor((availH + gap) / (itemH + gap));
+                            count = Math.max(1, cols * rows);
+                        }
+
+                        if (typeof count === 'number' && count > 0) {
+                            const positions = createOptimalGrid({
+                                itemWidth: itemW, itemHeight: itemH, count,
+                                availableWidth: availW, availableHeight: availH,
+                                gap, marginX: margin, marginY: margin
+                            });
+
+                            // Ensure we have the latest src (from bg removal)
+                            // processBackgroundRemovalInternal updates the cache, so we can pull from it OR use the src in cur if it was updated
+                            const latestSrc = (cur as ImageElement).src;
+                            const groupId = (cur as any).groupId || `grid-${generateId()}`;
+
+                            const newItems = positions.map((pos, i) => ({
+                                ...cur,
+                                id: generateId(),
+                                x: pos.x,
+                                y: pos.y,
+                                scaleX,
+                                scaleY,
+                                name: `${cur.name?.split('-')[0] || 'item'}-${i + 1}`,
+                                width: w,
+                                height: h,
+                                src: latestSrc,
+                                groupId: groupId
+                            }));
+
+                            // REPLACE logic: Remove the source, add the grid.
+                            // We filter out the source (cur) and any existing group members
+                            currentImages = currentImages.filter(p => p.id !== cur.id && (!('groupId' in p) || p.groupId !== groupId));
+                            currentImages.push(...(newItems as CanvasElement[]));
+
+                            // Update selection to the new grid items
+                            // currentSelection = newItems.map(i => i.id); // Optional: select new items
+                        }
+                    }
+
+                    if (act.action === 'duplicate') {
+                        const cnt = act.count || 1;
+                        const clones: CanvasElement[] = [];
+                        for (let k = 0; k < cnt; k++) {
+                            const clone = { ...cur, id: generateId(), x: cur.x + 20 * (k + 1), y: cur.y + 20 * (k + 1) };
+                            clones.push(clone);
+                        }
+                        currentImages.push(...clones);
+                    }
+
+                    if (act.action === 'delete_selected' || act.action === 'delete_others' || act.action === 'delete_all') {
+                        if (act.action === 'delete_all') {
+                            currentImages = [];
+                        } else if (act.action === 'delete_selected') {
+                            currentImages = currentImages.filter(p => p.id !== cur.id);
+                        } else {
+                            // delete_others
+                            currentImages = currentImages.filter(p => p.id === cur.id);
+                        }
+                    }
+
+                    if (act.action === 'align' && act.type) {
+                        // Align logic requires multiple items in selection usually, or aligning single item to board?
+                        // If single item, align to board.
+                        // If multiple (in currentSelection), align to bounds.
+                        // ... simplified align to board for single item context ...
+                        // For detailed align, we'd need to reimplement handleAlign logic using currentImages.
+                        // Passing for now to avoid complexity explosion, assume single item flow mainly.
+                    }
+
+                    if (act.action === 'move') {
+                        let nx = act.x !== undefined ? act.x : cur.x;
+                        let ny = act.y !== undefined ? act.y : cur.y;
+                        if (act.position === 'center') {
+                            nx = docSettings.width / 2 - ((cur as any).width * cur.scaleX) / 2;
+                            ny = docSettings.height / 2 - ((cur as any).height * cur.scaleY) / 2;
+                        }
+                        currentImages[curIdx] = { ...cur, x: nx, y: ny };
+                        cur = currentImages[curIdx];
+                    }
+
+                    if (act.action === 'upscale') {
+                        showToast('Iniciando Upscale de IA...', 'info');
+                    }
+                    if (act.action === 'opacity' && act.value !== undefined) {
+                        currentImages[curIdx] = { ...cur, opacity: act.value };
+                        cur = currentImages[curIdx];
+                    }
+                    if (act.action === 'visibility' && act.visible !== undefined) {
+                        currentImages[curIdx] = { ...cur, visible: act.visible };
+                        cur = currentImages[curIdx];
+                    }
+                    if (act.action === 'lock' && act.locked !== undefined) {
+                        currentImages[curIdx] = { ...cur, locked: act.locked };
+                        cur = currentImages[curIdx];
+                    }
+                    if (act.action === 'canvas_background' && act.color) {
+                        handleSettingsChange({ backgroundColor: act.color });
+                    }
                 }
+
+                // Final Commit
+                setImages(currentImages);
+                saveToHistory(currentImages, null); // Checkpoint
+
+
+
             }
 
-            setAiResponse(finalResp);
-            setAiHistory(prev => [...prev, { role: 'user', text: command }, { role: 'model', text: finalResp }]);
-            showToast('Designer IA finalizou', 'success');
+
+            setAiResponse(humanMessage);
+            setAiHistory(prev => [...prev.slice(-2), { role: 'user', text: command }, { role: 'model', text: humanMessage }]);
+            showToast('IA Finalizada', 'success');
+
         } catch (e) {
             console.error(e);
-            showToast('Erro ao processar comando IA', 'error');
-            setAiResponse('Desculpe, não consegui realizar essa tarefa. Tente ser mais específico.');
+            showToast('Erro crítico IA', 'error');
+            setAiResponse("Erro ao processar comando.");
         } finally {
             setAiThinking(false);
         }
         return 'Processado';
     };
+
+
+
+
+    const handleExportPNG = useCallback(() => {
+        const stage = canvasRef.current?.getStage();
+        const layer = canvasRef.current?.getLayer();
+        if (!stage || !layer || !docSettings) return;
+
+        // Deseleciona tudo para garantir exportação limpa
+        setSelectedIds([]);
+
+        // Timeout para garantir o re-render
+        setTimeout(async () => {
+            const isTransparent = docSettings.backgroundColor === 'transparent';
+            const bgNodes = layer.find('.background-rect');
+
+            // 1. BACKUP DO ESTADO VISUAL ATUAL (Zoom e Posição que o usuário está vendo)
+            const oldAttrs = {
+                scale: stage.scaleX(),
+                x: stage.x(),
+                y: stage.y()
+            };
+
+            try {
+                // 2. RESET TÉCNICO PARA EXPORTAÇÃO (Escala 1:1 na Origem do Papel)
+                stage.scale({ x: 1, y: 1 });
+                stage.position({ x: 0, y: 0 });
+                stage.batchDraw();
+
+                if (isTransparent) {
+                    bgNodes.forEach((n: any) => n.hide());
+                }
+
+                // CÁLCULO DE PRECISÃO INDUSTRIAL:
+                // Precisamos capturar o documento no mundo real (1:1), 
+                // mas as coordenadas do Stage estão afetadas pelo zoom/pan.
+
+                const canvas = stage.toCanvas({
+                    x: 0,
+                    y: 0,
+                    width: docSettings.width,
+                    height: docSettings.height,
+                    pixelRatio: 1,
+                });
+                stage.scale({ x: oldAttrs.scale, y: oldAttrs.scale });
+                stage.position({ x: oldAttrs.x, y: oldAttrs.y });
+                stage.batchDraw();
+                // O ponto (0,0) do seu papel na tela é onde o Stage.x/y estão
+                // mas invertidos e divididos pelo zoom para voltar ao tamanho real.
+
+                // Finalized capture and restoration.
+
+                if (!canvas) {
+                    throw new Error("Falha Crítica de Hardware: Não foi possível gerar a imagem em alta resolução.");
+                }
+
+                // Step 2: Convert to Blob (Binary) to bypass Base64 limits
+                canvas.toBlob(async (blob: Blob | null) => {
+                    if (!blob) {
+                        showToast("Falha técnica ao gerar arquivo binário.", "error");
+                        return;
+                    }
+
+                    try {
+                        const targetDpi = docSettings.dpi || 300;
+                        const arrayBuffer = await blob.arrayBuffer();
+                        const bytes = new Uint8Array(arrayBuffer);
+
+                        // Step 3: Inject DPI Metadata directly into bytes
+                        const newBytes = addDpiToPngBuffer(bytes, targetDpi);
+                        const finalBlob = new Blob([newBytes.buffer as ArrayBuffer], { type: 'image/png' });
+
+                        // Step 4: Download using Object URL (More robust for large files)
+                        const url = URL.createObjectURL(finalBlob);
+                        const link = document.createElement('a');
+                        link.download = `IMPRIME-AI-${activeDocument?.settings.name || 'documento'}.png`;
+                        link.href = url;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+
+                        // Cleanup
+                        setTimeout(() => URL.revokeObjectURL(url), 100);
+
+                        showToast(`Exportado em ${docSettings.widthCm}x${docSettings.heightCm}cm (${targetDpi} DPI)`, 'success');
+                    } catch (err) {
+                        console.error("Blob processing error:", err);
+                        showToast("Erro ao processar arquivo final.", "error");
+                    }
+                }, 'image/png');
+            } catch (e: any) {
+                console.error('Export error:', e);
+                showToast(e.message || 'Erro ao exportar imagem', 'error');
+            } finally {
+                // Restaurar visibilidade do fundo
+                if (isTransparent) {
+                    bgNodes.forEach((n: any) => n.show());
+                }
+            }
+        }, 100);
+    }, [docSettings, activeDocument, showToast, setSelectedIds]);
 
     const openDocumentsList: OpenDocument[] = documents.map(d => ({
         id: d.id, name: d.settings.name || 'Sem título',
@@ -1148,12 +1514,58 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
         );
     }
 
+    /* DUPLICATE REMOVED
+        const stage = canvasRef.current?.getStage();
+        if (!stage || !docSettings) return;
+     
+        // Save current selection to restore later
+        const currentSelection = selectedIds;
+     
+        // Deseleciona tudo para não exportar transformer/seleção
+        setSelectedIds([]);
+     
+        // Pequeno timeout para garantir que re-render sem seleção aconteça
+        setTimeout(() => {
+            try {
+                // Cálculo exato para pixel perfect baseado nas configurações do documento
+                // Se docSettings.width é 2480 (A4 300dpi), queremos exportar 2480px.
+                // O stage pode estar com scale visual (zoom).
+                // pixelRatio = 1 / stage.scaleX() compensa o zoom e exporta tamanho real.
+     
+                const pixelRatio = 1 / stage.scaleX();
+     
+                const dataURL = stage.toDataURL({
+                    pixelRatio: pixelRatio,
+                    mimeType: 'image/png',
+                    quality: 1
+                });
+     
+                const link = document.createElement('a');
+                link.download = `IMPRIME - AI - ${ activeDocument?.name || 'design' }.png`;
+                link.href = dataURL;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+     
+                showToast('Imagem exportada com sucesso (Alta Resolução)', 'success');
+     
+                // Restore selection if needed (optional, might feel jumpy)
+                // setSelectedIds(currentSelection);
+            } catch (e) {
+                console.error('Export error:', e);
+                showToast('Erro ao exportar imagem', 'error');
+            }
+        }, 100);
+    */
+
     return (
         <div className={`editor-view ${isDraggingOver ? 'dragging' : ''}`}
-            onDragOver={e => { e.preventDefault(); setIsDraggingOver(true); }}
-            onDragLeave={e => { e.preventDefault(); setIsDraggingOver(false); }}
+            onDragOver={e => { e.preventDefault(); e.stopPropagation(); setIsDraggingOver(true); }}
+            onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setIsDraggingOver(false); }}
             onDrop={e => {
-                e.preventDefault(); setIsDraggingOver(false);
+                e.preventDefault();
+                e.stopPropagation();
+                setIsDraggingOver(false);
                 Array.from(e.dataTransfer.files).forEach(f => handleAddImage(f));
             }}
         >
@@ -1165,33 +1577,17 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
 
             <Toolbar
                 activeTool={activeTool}
-                onToolSelect={t => {
-                    if (t === 'background-removal') {
-                        if (!selectedId) {
-                            showToast('Selecione uma imagem primeiro', 'info');
-                            return;
-                        }
-                        setShowBackgroundRemoval(true);
-                    } else if (t === 'upscale') {
-                        if (!selectedId) {
-                            showToast('Selecione uma imagem primeiro', 'info');
-                            return;
-                        }
-                        showToast('Upscale em breve...', 'info');
-                    } else {
-                        setActiveTool(t as Tool);
-                    }
-                }}
-                onExport={() => { }}
+                onToolSelect={handleToolSelect}
+                onExport={handleExportPNG}
                 canDelete={!!selectedId}
                 onDelete={handleDeleteAction}
                 canDuplicate={!!selectedId}
-                onDuplicate={() => handleDuplicateAction()}
+                onDuplicate={handleDuplicateAction}
                 onUndo={handleUndo}
                 onRedo={handleRedo}
-                canUndo={activeDocument ? activeDocument.historyIndex > 0 : false}
-                canRedo={activeDocument ? activeDocument.historyIndex < activeDocument.history.length - 1 : false}
-                onNew={() => setShowNewDocModal(true)}
+                canUndo={canUndo}
+                canRedo={canRedo}
+                onNew={handleNewDocumentClick}
                 canAlign={selectedIds.length >= 2}
                 onAlign={handleAlign}
                 canDistribute={selectedIds.length >= 3}
@@ -1201,16 +1597,13 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
             <DocumentTabs
                 documents={openDocumentsList} activeDocumentId={activeDocumentId}
                 onSelectDocument={setActiveDocumentId}
-                onCloseDocument={id => {
-                    setDocuments(prev => prev.filter(d => d.id !== id));
-                    if (id === activeDocumentId) setActiveDocumentId(null);
-                }}
-                onNewDocument={() => setShowNewDocModal(true)}
+                onCloseDocument={closeDocument}
+                onNewDocument={handleNewDocumentClick}
             />
 
             <div className="editor-content">
                 <EditorSidebar
-                    activeTool={activeTool} onToolSelect={t => setActiveTool(t as Tool)}
+                    activeTool={activeTool} onToolSelect={handleToolSelect}
                     onAddImage={() => fileInputRef.current?.click()} onAddShape={() => { }} onAddText={() => { }}
                     onRemoveBackground={handleRemoveBackgroundAction}
                     onUpscale={() => {
@@ -1235,6 +1628,7 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
                 <div className="editor-workspace" ref={scrollContainerRef}>
                     {activeDocument && (
                         <KonvaCanvas
+                            ref={canvasRef}
                             width={docSettings!.width}
                             height={docSettings!.height}
                             images={resolvedImages}
@@ -1242,7 +1636,7 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
                             currentSelectedIds={selectedIds}
                             onSelect={setSelectedId}
                             onSelectMultiple={setSelectedIds}
-                            onTransform={(id, attrs) => handleUpdateMany([{ id, attrs }])}
+                            onTransform={handleTransform}
                             backgroundColor={(docSettings?.backgroundColor || 'white') as string}
                             onDelete={handleDeleteAction}
                             onDuplicate={handleDuplicateAction}
@@ -1253,12 +1647,24 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
                             availableFonts={[]} // Fix logic later if needed
                             scale={zoomScale}
                             onScaleChange={setZoomScale}
-                            onDrop={(e) => {
-                                e.preventDefault();
-                                const files = Array.from(e.dataTransfer.files) as File[];
-                                files.forEach(f => handleAddImage(f));
-                            }}
+                            onDrop={handleCanvasDrop}
                             onDragOver={(e) => e.preventDefault()}
+                            transparencyWarning={transparencyWarning}
+                            onIgnoreTransparency={() => setTransparencyWarning(null)}
+                            onFixTransparency={(id) => {
+                                const img = resolvedImages.find(i => i.id === id);
+                                if (img && img.type === 'image') {
+                                    setTransparencyImageSrc((img as ImageElement).src || '');
+                                    setPendingTransparencyImage({ id: img.id, originalImg: img as ImageElement });
+                                    setShowTransparencyModal(true);
+                                    setTransparencyWarning(null);
+                                }
+                            }}
+                            // Empty Space Props
+                            emptySpaceWarning={emptySpaceWarning}
+                            onIgnoreEmptySpace={() => setEmptySpaceWarning(null)}
+                            onTrimEmptySpace={handleTrimAction}
+
                         />
                     )}
 
@@ -1274,27 +1680,44 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
                         hasSelection={!!selectedId} onPaintClick={() => setShowAICreativePanel(true)}
                         onInputChange={setCurrentAiPrompt} initialInput={currentAiPrompt}
                         onHistoryChange={setAiHistory}
+                        tokenUsage={tokenUsage}
                     />
                 </div>
 
                 <div className="right-panel">
+                    {activeDocument && (
+                        <DocumentSettingsPanel
+                            width={activeDocument.settings.width}
+                            height={activeDocument.settings.height}
+                            dpi={activeDocument.settings.dpi}
+                            backgroundColor={activeDocument.settings.backgroundColor || '#ffffff'}
+                            onSettingsChange={handleSettingsChange}
+                        />
+                    )}
+
                     <LayerPanel
                         images={resolvedImages as any} selectedId={selectedId} onSelect={setSelectedId}
-                        onToggleVisibility={(id) => {
-                            const img = images.find(i => i.id === id);
-                            if (img) handleUpdateMany([{ id, attrs: { visible: !img.visible } }]);
-                        }}
-                        onToggleLock={(id) => {
-                            const img = images.find(i => i.id === id);
-                            if (img) handleUpdateMany([{ id, attrs: { locked: !img.locked } }]);
-                        }}
-                        onReorder={(newOrder) => setImages(newOrder)}
+                        onToggleVisibility={handleVisibilityToggle}
+                        onToggleLock={handleLockToggle}
+                        onReorder={setImages}
                         onDelete={handleDeleteAction}
-                        onDuplicate={() => handleDuplicateAction()}
-                        onRename={(id, newName) => handleUpdateMany([{ id, attrs: { name: newName } }])}
+                        onDuplicate={handleDuplicateAction}
+                        onRename={handleRename}
                     />
+
+                    {selectedElement && (
+                        <PropertiesPanel
+                            selectedElement={selectedElement}
+                            onUpdate={(id, attrs) => handleUpdateMany([{ id, attrs }])}
+                            onDelete={handleDeleteAction}
+                            onDuplicate={handleDuplicateAction}
+                            dpi={docSettings?.dpi}
+                        />
+                    )}
                 </div>
             </div>
+
+
 
             <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={e => {
                 if (e.target.files?.[0]) handleAddImage(e.target.files[0]);
@@ -1345,7 +1768,7 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
                                         y: newY,
                                         width: newW,
                                         height: newH,
-                                        name: i.name ? `${i.name.split('.')[0]}-sem-fundo` : 'imagem-sem-fundo'
+                                        name: i.name ? `${i.name.split('.')[0]} -sem - fundo` : 'imagem-sem-fundo'
                                     };
                                 }
                                 return img;
@@ -1372,7 +1795,7 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
                                     return {
                                         ...img,
                                         src: newSrc,
-                                        name: img.name ? `${img.name.split('.')[0]}-ai` : 'ia-gerada'
+                                        name: img.name ? `${img.name.split('.')[0]} -ai` : 'ia-gerada'
                                     };
                                 }
                                 return img;
@@ -1389,9 +1812,10 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
                             return null;
                         }
                         try {
+                            const originalImg = resolvedImages.find(i => i.id === selectedId) as ImageElement;
                             const result = await window.electronAPI.kieAiProcess({
                                 ...params,
-                                imageBase64: (images.find(i => i.id === selectedId) as ImageElement).src || '',
+                                imageBase64: originalImg.src || '',
                                 apiKey: kieAiApiKey
                             });
                             if (result.success && result.imageBase64) {
@@ -1406,6 +1830,22 @@ const EditorView: React.FC<EditorViewProps> = ({ geminiApiKey, kieAiApiKey }) =>
                         }
                     }}
                 />
+            )}
+
+            {/* Modal de Transparência */}
+            {showTransparencyModal && (
+                <div className="modal-overlay" style={{ zIndex: 10000 }}>
+                    <div className="modal-content" style={{ width: '90%', height: '90%', maxWidth: '1000px', maxHeight: '800px', padding: 0, overflow: 'hidden', background: '#111' }} onClick={e => e.stopPropagation()}>
+                        <TransparencyCorrector
+                            imageSrc={transparencyImageSrc}
+                            onApply={handleApplyTransparencyFix}
+                            onCancel={() => {
+                                setShowTransparencyModal(false);
+                                setPendingTransparencyImage(null);
+                            }}
+                        />
+                    </div>
+                </div>
             )}
         </div>
     );

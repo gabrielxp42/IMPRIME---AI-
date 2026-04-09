@@ -16,6 +16,7 @@ export interface ValidationResult {
     contentWidthCm?: number;
     hasEmptySpace?: boolean;
     emptySpacePercentage?: number;
+    pageCount?: number;
   } | null;
 }
 
@@ -30,26 +31,29 @@ export class ImageValidator {
       widthCm: number;
       widthTolerance?: number;
       minHeightCm: number;
-    }
+    },
+    page: number = 1
   ): Promise<ValidationResult> {
     const errors: string[] = [];
     let info: ValidationResult['info'] = null;
+    const cacheKey = `${filePath}::${page}`;
 
     // Tentar obter do cache primeiro
-    if (this.metadataCache.has(filePath)) {
-      info = this.metadataCache.get(filePath)!;
+    if (this.metadataCache.has(cacheKey)) {
+      info = this.metadataCache.get(cacheKey)!;
     } else {
+      console.log(`[Validator] Validando: ${filePath} (Pág: ${page})`);
       const ext = filePath.toLowerCase().split('.').pop();
       if (ext === 'png') {
         info = await this.validatePNG(filePath);
       } else if (ext === 'tiff' || ext === 'tif') {
         info = await this.validateTIFF(filePath);
       } else if (ext === 'pdf') {
-        info = await this.validatePDF(filePath);
+        info = await this.validatePDF(filePath, page);
       }
 
       if (info) {
-        this.metadataCache.set(filePath, info);
+        this.metadataCache.set(cacheKey, info);
       }
     }
 
@@ -215,38 +219,70 @@ export class ImageValidator {
     }
   }
 
-  private async validatePDF(filePath: string): Promise<ValidationResult['info']> {
+  private async validatePDF(filePath: string, pageNum: number = 1): Promise<ValidationResult['info']> {
     try {
-      const pdfBytes = fs.readFileSync(filePath);
-      const pdfDoc = await PDFDocument.load(pdfBytes);
-      const pages = pdfDoc.getPages();
-
-      if (pages.length === 0) {
+      console.log(`[Validator] Iniciando validatePDF (Sharp): ${filePath} (Pág: ${pageNum})`);
+      if (!fs.existsSync(filePath)) {
+        console.error(`[Validator] Arquivo não encontrado: ${filePath}`);
         return null;
       }
+      
+      const stats = fs.statSync(filePath);
+      const fileSizeMB = stats.size / (1024 * 1024);
 
-      const firstPage = pages[0];
-      const { width, height } = firstPage.getSize();
+      // O Sharp é muito mais eficiente que o pdf-lib para apenas ler metadados de arquivos gigantes
+      // pois ele usa libvips em C e não carrega o buffer inteiro no heap do V8.
+      const pageIndex = pageNum - 1;
+      const metadata = await sharp(filePath, { page: pageIndex }).metadata();
+      
+      if (!metadata) {
+          throw new Error('Sharp não retornou metadados para o PDF');
+      }
 
-      // PDF geralmente usa pontos (1 ponto = 1/72 polegada)
-      // Converter para cm
-      const widthCm = (width / 72) * 2.54;
-      const heightCm = (height / 72) * 2.54;
+      // PDF padrão usa 72 DPI para as dimensões de pontos.
+      // O Sharp pode retornar 'density' se estiver disponível.
+      const dpi = metadata.density || 72;
+      const widthPx = metadata.width || 0;
+      const heightPx = metadata.height || 0;
+      const pageCount = metadata.pages || 1;
 
-      // Tentar obter DPI do PDF (pode não estar disponível)
-      // Assumir 300 DPI como padrão para PDFs de alta qualidade
-      const dpi = 300;
+      // Converter pontos/pixels para cm
+      // No Sharp, width/height para PDF são em pontos tipográficos (1/72 pol) se a density for 72.
+      const widthCm = (widthPx / dpi) * 2.54;
+      const heightCm = (heightPx / dpi) * 2.54;
+
+      console.log(`[Validator] PDF (Sharp) - Pág ${pageNum}: ${widthCm.toFixed(2)}x${heightCm.toFixed(2)}cm, ${dpi} DPI`);
 
       return {
-        dpi,
+        dpi: 300, // Forçamos 300 para o cálculo de Spot White posterior ser seguro
         widthCm,
         heightCm,
-        widthPx: width,
-        heightPx: height,
+        widthPx,
+        heightPx,
+        pageCount,
       };
-    } catch (error) {
-      console.error('Erro ao validar PDF:', error);
-      return null;
+    } catch (error: any) {
+      console.warn('[Validator] Sharp falhou ao validar PDF, tentando fallback pdf-lib:', error.message);
+      try {
+          const pdfBytes = fs.readFileSync(filePath);
+          const pdfDoc = await PDFDocument.load(pdfBytes);
+          const pages = pdfDoc.getPages();
+          const targetPageNum = Math.max(1, Math.min(pageNum, pages.length));
+          const targetPage = pages[targetPageNum - 1];
+          const { width, height } = targetPage.getSize();
+
+          return {
+            dpi: 300,
+            widthCm: (width / 72) * 2.54,
+            heightCm: (height / 72) * 2.54,
+            widthPx: width,
+            heightPx: height,
+            pageCount: pages.length,
+          };
+      } catch (innerError) {
+          console.error('[Validator] Erro fatal ao validar PDF:', innerError);
+          return null;
+      }
     }
   }
 }
